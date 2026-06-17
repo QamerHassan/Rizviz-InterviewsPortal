@@ -1,0 +1,50 @@
+# ── Node / React frontend ──────────────────────────────────────────
+node_modules/
+rizviz-frontend/node_modules/
+rizviz-frontend/build/
+rizviz-frontend/.env.local
+rizviz-frontend/.env.production
+
+# ── .NET backend ───────────────────────────────────────────────────
+RizvizERP.API/bin/
+RizvizERP.API/obj/
+RizvizERP.API/*.user
+*.suo
+*.vs/
+.vs/
+
+# ── Secrets & credentials (NEVER commit these) ─────────────────────
+.env
+*.env
+appsettings.Production.json
+RizvizERP.API/appsettings.Production.json
+RizvizERP.API/google-credentials.json
+RizvizERP.API/credentials*.json
+RizvizERP.API/*.pfx
+RizvizERP.API/*.p12
+
+# ── Data files with personal/sensitive info ────────────────────────
+*.xlsx
+*.xls
+*.csv
+
+# ── OS / Editor ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+*.tmp
+.idea/
+.vscode/settings.json
+
+# ── Antigravity AI workspace ────────────────────────────────────────
+.antigravityignore
+.gemini/
+
+# ── Local scripts with API keys / secrets ───────────────────────────
+scratch-groq.js
+test-post.js
+test-enhance.ps1
+test_notification_arez.js
+RizvizERP.API/appsettings.json
+RizvizERP.API/appsettings.Development.json

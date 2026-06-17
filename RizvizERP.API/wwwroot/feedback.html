@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Submit Feedback – RizvizERP</title>
+  <meta name="description" content="Submit your feedback to the RizvizERP team. Your response is stored securely and synced to our records." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3d;
+      --accent:    #6366f1;
+      --accent-h:  #4f52e0;
+      --success:   #22c55e;
+      --warn:      #f59e0b;
+      --error:     #ef4444;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --radius:    12px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px 44px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 25px 60px rgba(0,0,0,.45);
+      animation: slideUp .4s ease;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Header ── */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .logo-dot {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text { font-size: 18px; font-weight: 700; letter-spacing: -.4px; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+
+    /* ── Form ── */
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      letter-spacing: .3px;
+    }
+    label span { color: var(--error); margin-left: 2px; }
+
+    input, textarea {
+      width: 100%;
+      background: #111420;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 15px;
+      padding: 12px 16px;
+      transition: border-color .2s, box-shadow .2s;
+      outline: none;
+      resize: vertical;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.18);
+    }
+    input.error, textarea.error { border-color: var(--error); }
+
+    .field { margin-bottom: 20px; }
+    .field-hint {
+      font-size: 12px;
+      color: var(--error);
+      margin-top: 5px;
+      display: none;
+    }
+    .field-hint.visible { display: block; }
+
+    /* ── Submit button ── */
+    button[type=submit] {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s;
+      margin-top: 4px;
+      letter-spacing: .2px;
+    }
+    button[type=submit]:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    button[type=submit]:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Banners ── */
+    .banner {
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 14px;
+      line-height: 1.55;
+      margin-bottom: 24px;
+      display: none;
+      animation: fadeIn .3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .banner.visible { display: flex; align-items: flex-start; gap: 12px; }
+    .banner-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .banner.success { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); color: #86efac; }
+    .banner.partial  { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); color: #fcd34d; }
+    .banner.error    { background: rgba(239,68,68,.12);  border: 1px solid rgba(239,68,68,.35);  color: #fca5a5; }
+
+    /* ── char counter ── */
+    .counter { font-size: 12px; color: var(--muted); text-align: right; margin-top: 4px; }
+    .counter.warn { color: var(--warn); }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- Header -->
+  <div class="logo">
+    <div class="logo-dot">💬</div>
+    <span class="logo-text">RizvizERP</span>
+  </div>
+  <h1>Share your Feedback</h1>
+  <p class="subtitle">Your thoughts help us improve. We read every submission.</p>
+
+  <!-- Status banners -->
+  <div id="banner-success" class="banner success">
+    <span class="banner-icon">✅</span>
+    <div><strong>Thank you!</strong> Your feedback was saved and synced to our records.</div>
+  </div>
+  <div id="banner-partial" class="banner partial">
+    <span class="banner-icon">⚠️</span>
+    <div><strong>Saved!</strong> Your feedback was stored in our database, but the Google Sheets sync couldn't complete right now. We'll retry it automatically.</div>
+  </div>
+  <div id="banner-error" class="banner error">
+    <span class="banner-icon">❌</span>
+    <div id="error-text">Something went wrong. Please try again.</div>
+  </div>
+
+  <!-- Form -->
+  <form id="feedbackForm" novalidate>
+
+    <div class="field">
+      <label for="name">Full Name <span>*</span></label>
+      <input id="name" name="name" type="text" placeholder="e.g. Ammara Liaqat" autocomplete="name" />
+      <div class="field-hint" id="hint-name">Please enter your name.</div>
+    </div>
+
+    <div class="field">
+      <label for="email">Email Address <span>*</span></label>
+      <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" />
+      <div class="field-hint" id="hint-email">Please enter a valid email address.</div>
+    </div>
+
+    <div class="field">
+      <label for="message">Message <span>*</span></label>
+      <textarea id="message" name="message" rows="5"
+                placeholder="Tell us what you think — what's working, what could be better…"
+                maxlength="4000"></textarea>
+      <div class="counter" id="char-counter">0 / 4000</div>
+      <div class="field-hint" id="hint-message">Message must be at least 5 characters.</div>
+    </div>
+
+    <button type="submit" id="submitBtn">
+      Send Feedback
+    </button>
+
+  </form>
+</div>
+
+<script>
+  const API_URL = 'http://localhost:5000/api/general-feedback';
+
+  // ── DOM refs ─────────────────────────────────────────────────────────────
+  const form       = document.getElementById('feedbackForm');
+  const nameInput  = document.getElementById('name');
+  const emailInput = document.getElementById('email');
+  const msgInput   = document.getElementById('message');
+  const submitBtn  = document.getElementById('submitBtn');
+  const counter    = document.getElementById('char-counter');
+
+  // ── Char counter ─────────────────────────────────────────────────────────
+  msgInput.addEventListener('input', () => {
+    const len = msgInput.value.length;
+    counter.textContent = `${len} / 4000`;
+    counter.className = 'counter' + (len > 3800 ? ' warn' : '');
+  });
+
+  // ── Inline validation helpers ─────────────────────────────────────────────
+  function setError(input, hintId, show) {
+    input.classList.toggle('error', show);
+    document.getElementById(hintId).classList.toggle('visible', show);
+  }
+
+  function validateEmail(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  }
+
+  function validateForm() {
+    let ok = true;
+    if (!nameInput.value.trim())                 { setError(nameInput, 'hint-name', true);    ok = false; }
+    else                                          { setError(nameInput, 'hint-name', false); }
+    if (!validateEmail(emailInput.value))         { setError(emailInput, 'hint-email', true);  ok = false; }
+    else                                          { setError(emailInput, 'hint-email', false); }
+    if (msgInput.value.trim().length < 5)         { setError(msgInput, 'hint-message', true);  ok = false; }
+    else                                          { setError(msgInput, 'hint-message', false); }
+    return ok;
+  }
+
+  // ── Clear banners ─────────────────────────────────────────────────────────
+  function hideBanners() {
+    ['banner-success','banner-partial','banner-error'].forEach(id =>
+      document.getElementById(id).classList.remove('visible')
+    );
+  }
+
+  // ── Prevent duplicate rapid submissions ───────────────────────────────────
+  let lastSubmitHash = null;
+
+  function hashPayload(p) {
+    return JSON.stringify(p);
+  }
+
+  // ── Submit handler ────────────────────────────────────────────────────────
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideBanners();
+
+    if (!validateForm()) return;
+
+    const payload = {
+      Name:    nameInput.value.trim(),
+      Email:   emailInput.value.trim().toLowerCase(),
+      Message: msgInput.value.trim()
+    };
+
+    // Basic duplicate guard: same payload within the same session
+    const hash = hashPayload(payload);
+    if (hash === lastSubmitHash) {
+      document.getElementById('error-text').textContent =
+        'It looks like you already submitted this feedback. Please change your message if you want to submit again.';
+      document.getElementById('banner-error').classList.add('visible');
+      return;
+    }
+
+    // ── Loading state ──
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span>Sending…';
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // 200 = full success
+        document.getElementById('banner-success').classList.add('visible');
+        lastSubmitHash = hash;
+        form.reset();
+        counter.textContent = '0 / 4000';
+      } else if (res.status === 207) {
+        // 207 = saved to DB but sheet failed (partial success)
+        document.getElementById('banner-partial').classList.add('visible');
+        lastSubmitHash = hash;
+        form.reset();
+        counter.textContent = '0 / 4000';
+      } else {
+        // Validation errors or server error
+        let msg = 'Submission failed. Please check your input and try again.';
+        if (data?.message) msg = data.message;
+        else if (data?.errors) {
+          msg = Object.values(data.errors)
+            .flat()
+            .join(' ');
+        }
+        document.getElementById('error-text').textContent = msg;
+        document.getElementById('banner-error').classList.add('visible');
+      }
+
+    } catch (err) {
+      document.getElementById('error-text').textContent =
+        'Network error — could not reach the server. Please check your connection and try again.';
+      document.getElementById('banner-error').classList.add('visible');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = 'Send Feedback';
+    }
+  });
+
+  // ── Clear errors on typing ────────────────────────────────────────────────
+  nameInput.addEventListener('input',  () => setError(nameInput,  'hint-name',    false));
+  emailInput.addEventListener('input', () => setError(emailInput, 'hint-email',   false));
+  msgInput.addEventListener('input',   () => setError(msgInput,   'hint-message', false));
+</script>
+</body>
+</html>
