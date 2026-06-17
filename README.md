@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/preview.png" alt="Rizviz ERP — Interviews Portal" width="100%" style="border-radius:16px;" />
+<img src="docs/dashboard.png" alt="Rizviz ERP — Interviews Portal" width="100%" style="border-radius:16px;" />
 
 <br/><br/>
 
