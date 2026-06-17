@@ -183,6 +183,6 @@ All rights reserved © 2026 Rizviz Int. Impex.
 
 <div align="center">
 
-Made with ❤️ by the Rizviz Engineering Team
+Made with ❤️ by Qamer Hassan
 
 </div>
