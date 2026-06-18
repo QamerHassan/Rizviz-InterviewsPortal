@@ -1,7 +1,0 @@
-{
-  "buildCommand": "cd rizviz-frontend && npm install --loglevel=error && CI=false npm run build",
-  "outputDirectory": "rizviz-frontend/build",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
