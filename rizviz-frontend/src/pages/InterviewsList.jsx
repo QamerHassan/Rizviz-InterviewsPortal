@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Table, Tabs, Button, Space, Tag, Modal, Form, Input, DatePicker, Select, Rate, Badge, Typography, message, Tooltip, InputNumber, Row, Col } from 'antd';
-import { PlusOutlined, ScheduleOutlined, StarOutlined, UserOutlined, ClockCircleOutlined, CheckCircleOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { Card, Table, Tabs, Button, Space, Tag, Modal, Form, Input, DatePicker, Select, Rate, Badge, Typography, message, Tooltip, InputNumber } from 'antd';
+import { PlusOutlined, ScheduleOutlined, StarOutlined, UserOutlined, CheckCircleOutlined, AppstoreOutlined } from '@ant-design/icons';
 import {
   useGetInterviewsQuery,
   useScheduleInterviewMutation,

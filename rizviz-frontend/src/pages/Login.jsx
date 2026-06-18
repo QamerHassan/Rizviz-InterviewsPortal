@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiSlice, useLoginMutation, useGetCompaniesQuery, useGetBranchesQuery } from '../store/apiSlice';
 import { setCredentials } from '../store/authSlice';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const Login = () => {
   const [form] = Form.useForm();
@@ -25,7 +25,7 @@ const Login = () => {
   });
 
   const displayCompanies = companies;
-  const displayBranches = companyCode ? branches : [];
+  const displayBranches = useMemo(() => (companyCode ? branches : []), [companyCode, branches]);
 
   const [login, { isLoading, error }] = useLoginMutation();
 

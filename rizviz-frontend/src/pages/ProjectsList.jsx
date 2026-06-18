@@ -107,7 +107,6 @@ const ProjectsList = () => {
 
   const labelColor = isDarkMode ? '#94a3b8' : '#6b7280';
   const strongColor = isDarkMode ? '#e2e8f0' : '#1e293b';
-  const cardBg = isDarkMode ? '#1e293b' : '#ffffff';
 
   const tableColumns = [
     { title: 'Code', dataIndex: 'ProjectCode', key: 'ProjectCode', width: 90, render: (t) => <span className="font-mono font-bold">{t}</span> },

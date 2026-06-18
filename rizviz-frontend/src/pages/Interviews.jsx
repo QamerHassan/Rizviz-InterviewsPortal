@@ -2,11 +2,11 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Table, Button, Space, Tag, Modal, Form, Input, DatePicker, Select, Typography, App,
-  Tooltip, InputNumber, Row, Col, Radio, Alert, Upload, Dropdown, Avatar
+  Tooltip, InputNumber, Row, Col, Radio, Alert, Upload, Avatar
 } from 'antd';
 import {
   PlusOutlined, UserOutlined,
-  ReloadOutlined, EditOutlined, DeleteOutlined, DatabaseOutlined, ImportOutlined,
+  ReloadOutlined, EditOutlined, DeleteOutlined, ImportOutlined,
   DownloadOutlined, SearchOutlined, FilterOutlined, AppstoreOutlined, UnorderedListOutlined,
   CalendarOutlined, HistoryOutlined, SyncOutlined, TeamOutlined
 } from '@ant-design/icons';
@@ -314,21 +314,6 @@ const Interviews = () => {
     return '';
   };
 
-  const handleSeed = async () => {
-    try {
-      const result = await refreshFromExcel().unwrap();
-      setSyncSummary(result);
-      setSyncModalOpen(true);
-      message.success(result?.message || 'Loaded real CSV data.');
-      refetchStats();
-      refetchPaged();
-      refetchStatusBreakdown();
-      refetchSyncStatus();
-    } catch (err) {
-      message.error(err?.data?.message || 'Failed to load CSV.');
-    }
-  };
-
   const handleUpload = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -463,18 +448,6 @@ const Interviews = () => {
   }, [dataColumns, hasExcelColumns, isAdmin]);
 
   const tableScrollX = Math.max(1400, tableColumns.reduce((sum, c) => sum + (c.width || 120), 0));
-
-  const adminMenuItems = [
-    { key: 'seed', label: 'Reload Interview Software.xlsx (replaces all)', icon: <DatabaseOutlined />, onClick: handleSeed },
-    {
-      key: 'upload',
-      label: (
-        <Upload accept=".csv,.xlsx,.xls" showUploadList={false} beforeUpload={handleUpload}>
-          <span>Upload Excel / CSV (replaces all)</span>
-        </Upload>
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-5" style={{ overflowX: 'visible' }}>
