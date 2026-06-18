@@ -48,12 +48,16 @@ namespace RizvizERP.API
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // Configure CORS
+            // Configure CORS — allow localhost dev + deployed Vercel frontend
             services.AddCors(options =>
             {
                 options.AddPolicy("CorsPolicy", policy =>
                 {
-                    policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
+                    policy.WithOrigins(
+                            "http://localhost:3000",
+                            "http://localhost:3001",
+                            "https://rizviz-interviews-portal.vercel.app"
+                        )
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
