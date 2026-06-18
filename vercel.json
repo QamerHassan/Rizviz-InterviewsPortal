@@ -1,18 +1,7 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "rizviz-frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/rizviz-frontend/$1"
-    }
+  "buildCommand": "cd rizviz-frontend && npm install --loglevel=error && CI=false npm run build",
+  "outputDirectory": "rizviz-frontend/build",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
