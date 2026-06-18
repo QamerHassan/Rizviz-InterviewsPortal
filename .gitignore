@@ -16,8 +16,6 @@ RizvizERP.API/*.user
 # ── Secrets & credentials (NEVER commit these) ─────────────────────
 .env
 *.env
-appsettings.Production.json
-RizvizERP.API/appsettings.Production.json
 RizvizERP.API/google-credentials.json
 RizvizERP.API/credentials*.json
 RizvizERP.API/*.pfx
