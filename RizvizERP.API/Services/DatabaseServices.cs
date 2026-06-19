@@ -208,13 +208,21 @@ namespace RizvizERP.API.Services
 
         public LoginResponse RefreshToken(TokenRefreshRequest request)
         {
+            // Parse the original token to preserve the username so GetCurrentUser()
+            // checks (which expect "db_jwt_mock_token_key_for_<username>") keep working.
+            const string prefix = "db_jwt_mock_token_key_for_";
+            var originalToken = request.Token ?? "";
+            var username = originalToken.StartsWith(prefix)
+                ? originalToken.Substring(prefix.Length)
+                : "user";
+
             return new LoginResponse
             {
-                Token = "db_jwt_mock_token_key_refreshed_" + Guid.NewGuid().ToString("N"),
-                RefreshToken = request.RefreshToken,
+                Token = prefix + username,
+                RefreshToken = "db_refresh_token_key_" + Guid.NewGuid().ToString("N"),
                 UserId = 1,
-                Username = "user",
-                FullName = "Refreshed User",
+                Username = username,
+                FullName = username,
                 Role = "HR",
                 CompanyCode = "RII",
                 BranchCode = "LHE"

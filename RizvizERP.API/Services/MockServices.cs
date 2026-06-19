@@ -229,13 +229,19 @@ namespace RizvizERP.API.Services
 
         public LoginResponse RefreshToken(TokenRefreshRequest request)
         {
+            const string prefix = "db_jwt_mock_token_key_for_";
+            var originalToken = request.Token ?? "";
+            var username = originalToken.StartsWith(prefix)
+                ? originalToken.Substring(prefix.Length)
+                : "Rizviz";
+
             return new LoginResponse
             {
-                Token = $"mock-jwt-token-refreshed-{Guid.NewGuid()}",
+                Token = prefix + username,
                 RefreshToken = $"mock-refresh-token-refreshed-{Guid.NewGuid()}",
                 UserId = 1,
-                Username = "Rizviz",
-                FullName = "Rizviz Admin",
+                Username = username,
+                FullName = username,
                 Role = "Admin",
                 CompanyCode = "RII",
                 BranchCode = "LHE",

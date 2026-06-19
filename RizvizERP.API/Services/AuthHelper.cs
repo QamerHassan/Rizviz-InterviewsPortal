@@ -9,7 +9,19 @@ namespace RizvizERP.API.Services
 {
     public static class AuthHelper
     {
-        private const string UsersFilePath = @"F:\Users\Qamer Hassan\RizvizERP\RizvizERP.API\users.xlsx";
+        private static string GetUsersFilePath()
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var pathInBase = Path.Combine(baseDir, "users.xlsx");
+            if (File.Exists(pathInBase)) return pathInBase;
+
+            var currentDir = Directory.GetCurrentDirectory();
+            var pathInCurrent = Path.Combine(currentDir, "users.xlsx");
+            if (File.Exists(pathInCurrent)) return pathInCurrent;
+
+            // Return the base-dir path as the final fallback (caller checks existence)
+            return pathInBase;
+        }
 
         // Robust is_active check: handles numeric 1, text "1", "true", "yes", "active"
         private static bool ParseIsActive(IXLCell cell)
@@ -59,9 +71,10 @@ namespace RizvizERP.API.Services
                 };
             }
 
-            if (!File.Exists(UsersFilePath))
+            var usersPath = GetUsersFilePath();
+            if (!File.Exists(usersPath))
             {
-                Console.WriteLine($"[AuthHelper] ERROR: users.xlsx not found at: {UsersFilePath}");
+                Console.WriteLine($"[AuthHelper] ERROR: users.xlsx not found at: {usersPath}");
                 return null;
             }
 
@@ -70,7 +83,7 @@ namespace RizvizERP.API.Services
             try
             {
                 // Open with FileShare.ReadWrite so it works even if Excel has the file open
-                using var fs = new FileStream(UsersFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var fs = new FileStream(usersPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var wb = new XLWorkbook(fs);
                 var ws = wb.Worksheet("users");
                 if (ws == null)
@@ -146,11 +159,12 @@ namespace RizvizERP.API.Services
                 };
             }
 
-            if (!File.Exists(UsersFilePath)) return null;
+            var usersPath = GetUsersFilePath();
+            if (!File.Exists(usersPath)) return null;
 
             try
             {
-                using var fs = new FileStream(UsersFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var fs = new FileStream(usersPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var wb = new XLWorkbook(fs);
                 var ws = wb.Worksheet("users");
                 if (ws == null) return null;
@@ -194,11 +208,12 @@ namespace RizvizERP.API.Services
                 new User { Id = 0, Username = "Rizviz", FullName = "Rizviz Admin", RoleName = "Admin", IsActive = true, IsFirstLogin = false }
             };
 
-            if (!File.Exists(UsersFilePath)) return users;
+            var usersPath = GetUsersFilePath();
+            if (!File.Exists(usersPath)) return users;
 
             try
             {
-                using var fs = new FileStream(UsersFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var fs = new FileStream(usersPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var wb = new XLWorkbook(fs);
                 var ws = wb.Worksheet("users");
                 if (ws == null) return users;
@@ -231,11 +246,12 @@ namespace RizvizERP.API.Services
 
         public static bool UpdateUserCredentials(string oldUsername, string newUsername, string hashedNewPassword)
         {
-            if (!File.Exists(UsersFilePath)) return false;
+            var usersPath = GetUsersFilePath();
+            if (!File.Exists(usersPath)) return false;
             try
             {
                 // Step 1: Read entire file into memory so we hold NO file lock
-                byte[] fileBytes = File.ReadAllBytes(UsersFilePath);
+                byte[] fileBytes = File.ReadAllBytes(usersPath);
 
                 using var readMs = new MemoryStream(fileBytes);
                 using var wb = new XLWorkbook(readMs);
@@ -265,7 +281,7 @@ namespace RizvizERP.API.Services
                 byte[] outBytes = writeMs.ToArray();
 
                 // Step 3: Write bytes to disk atomically (only after SaveAs succeeds)
-                File.WriteAllBytes(UsersFilePath, outBytes);
+                File.WriteAllBytes(usersPath, outBytes);
 
                 Console.WriteLine($"[AuthHelper] ✅ Credentials updated: '{oldUsername}' → '{newUsername}'");
                 return true;
@@ -279,11 +295,12 @@ namespace RizvizERP.API.Services
 
         public static bool ResetUserPassword(string username, string hashedTempPassword)
         {
-            if (!File.Exists(UsersFilePath)) return false;
+            var usersPath = GetUsersFilePath();
+            if (!File.Exists(usersPath)) return false;
             try
             {
                 // Step 1: Read entire file into memory
-                byte[] fileBytes = File.ReadAllBytes(UsersFilePath);
+                byte[] fileBytes = File.ReadAllBytes(usersPath);
 
                 using var readMs = new MemoryStream(fileBytes);
                 using var wb = new XLWorkbook(readMs);
@@ -312,7 +329,7 @@ namespace RizvizERP.API.Services
                 byte[] outBytes = writeMs.ToArray();
 
                 // Step 3: Write bytes atomically to disk
-                File.WriteAllBytes(UsersFilePath, outBytes);
+                File.WriteAllBytes(usersPath, outBytes);
 
                 Console.WriteLine($"[AuthHelper] ✅ Password reset for '{username}'");
                 return true;

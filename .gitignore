@@ -17,7 +17,8 @@ RizvizERP.API/*.user
 .env
 *.env
 RizvizERP.API/google-credentials.json
-RizvizERP.API/credentials*.json
+# credentials.json IS tracked — needed by Google Sheets in production
+# RizvizERP.API/credentials*.json
 RizvizERP.API/*.pfx
 RizvizERP.API/*.p12
 
@@ -25,6 +26,10 @@ RizvizERP.API/*.p12
 *.xlsx
 *.xls
 *.csv
+# users.xlsx IS tracked — it is the production user database (no raw passwords)
+!RizvizERP.API/users.xlsx
+# Interview Software.xlsx is ignored — contains sensitive business data
+# It must be uploaded to Railway as a volume or via environment
 
 # ── OS / Editor ────────────────────────────────────────────────────
 .DS_Store
