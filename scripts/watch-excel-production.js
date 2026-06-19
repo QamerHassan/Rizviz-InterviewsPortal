@@ -95,7 +95,11 @@ function uploadFile(file, url, onDone) {
               if (data.changes && data.changes.length > 0) {
                 console.log('\x1b[36mChanges:\x1b[0m');
                 data.changes.forEach((c) => {
-                  console.log(`  \x1b[33m[${c.changeType}]\x1b[0m ${c.intervieweeName} @ ${c.companyName}: ${c.summary}`);
+                  const type = c.changeType || c.ChangeType || 'Change';
+                  const name = c.intervieweeName || c.IntervieweeName || 'Unknown';
+                  const company = c.companyName || c.CompanyName || 'Unknown';
+                  const sum = c.summary || c.Summary || '';
+                  console.log(`  \x1b[33m[${type}]\x1b[0m ${name} @ ${company}: ${sum}`);
                 });
               }
               console.log('\x1b[32m🔔 SignalR notifications sent to connected users.\x1b[0m');
