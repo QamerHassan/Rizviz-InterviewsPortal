@@ -209,13 +209,36 @@ const Interviews = () => {
     if (!ts) return;
     const key = String(ts);
     if (lastSyncedRef.current && lastSyncedRef.current !== key) {
+      // A new sync happened (either local auto-sync or our watcher upload)
+      // Refetch all data so the table reflects the latest DB state
       refetchPaged();
       refetchStats();
       refetchStatusBreakdown();
       refetchSyncStatus();
+
+      // Also fetch the sync result so we can show the summary popup
+      // (same as clicking "Refresh" manually — gives the user a diff view)
+      refreshFromExcel().unwrap()
+        .then((result) => {
+          const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
+                          (result.insertedRows ?? result.InsertedRows ?? 0);
+          if (changed > 0) {
+            setSyncSummary(result);
+            const bySr = {};
+            (result.changes || []).forEach((c) => {
+              const sr = c.sr ?? c.Sr;
+              if (sr != null) bySr[sr] = c;
+            });
+            setLastChangeBySr(bySr);
+            setSyncModalOpen(true);
+            message.success(`${changed} row(s) updated from Excel — see sync summary.`);
+          }
+        })
+        .catch(() => { /* silent — data was already refreshed above */ });
     }
     lastSyncedRef.current = key;
-  }, [syncStatus, refetchPaged, refetchStats, refetchStatusBreakdown, refetchSyncStatus]);
+  }, [syncStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const rows = Array.isArray(pagedData?.data) ? pagedData.data : [];
 
