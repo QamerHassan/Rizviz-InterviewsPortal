@@ -34,6 +34,12 @@ namespace RizvizERP.API.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            if (!_settings.Enabled)
+            {
+                _logger.LogInformation("[AutoSync] Background poller is disabled by configuration.");
+                return;
+            }
+
             _logger.LogInformation(
                 "[AutoSync] Background poller started — checking every {Seconds}s for Excel changes.",
                 PollInterval.TotalSeconds);

@@ -68,7 +68,15 @@ namespace RizvizERP.API.Services
                 result.Message = $"Excel file not found: {sourcePath}";
                 result.FailedRows = 1;
                 result.Errors.Add(result.Message);
-                LogSync(result, result.Message);
+                
+                if (!string.Equals(changedBy, "AutoSync", StringComparison.OrdinalIgnoreCase))
+                {
+                    LogSync(result, result.Message);
+                }
+                else
+                {
+                    result.UnchangedRows = -1; // Sentinel value to skip logging and notifications
+                }
                 return result;
             }
 
