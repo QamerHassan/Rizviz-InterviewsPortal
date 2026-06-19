@@ -210,6 +210,26 @@ namespace RizvizERP.API.Controllers
                     }
                     assignedIds.Add(rowId);
 
+                    // ── Primary fallback: use stored DB fields ─────────────────────────
+                    // dbMatch holds the InterviewFeedback record whose Status/InvTo/etc.
+                    // were resolved and saved at submit time (even when Excel is absent
+                    // on the production server).  Only fall back to sheet columns or the
+                    // Excel-matched Interview row when the DB record lacks the value.
+                    var dbFb = (dbMatch != null && !assignedIds.Contains(dbMatch.Id)) ? dbMatch : null;
+
+                    var resolvedStatus      = (!string.IsNullOrWhiteSpace(match?.Status)      ? match.Status      : null)
+                                          ?? (!string.IsNullOrWhiteSpace(dbFb?.Status)        ? dbFb.Status        : null)
+                                          ?? GetValue(6);
+                    var resolvedInvTo       = (!string.IsNullOrWhiteSpace(match?.InvTo)        ? match.InvTo        : null)
+                                          ?? (!string.IsNullOrWhiteSpace(dbFb?.InvTo)          ? dbFb.InvTo          : null)
+                                          ?? GetValue(7);
+                    var resolvedInterviewFor = (!string.IsNullOrWhiteSpace(match?.InterviewFor)  ? match.InterviewFor  : null)
+                                          ?? (!string.IsNullOrWhiteSpace(dbFb?.InterviewFor)    ? dbFb.InterviewFor    : null)
+                                          ?? GetValue(8);
+                    var resolvedJobStart    = match?.JobStartDate?.ToString("dd-MMM-yyyy")
+                                          ?? (dbFb?.JobStartDate.HasValue == true ? dbFb.JobStartDate.Value.ToString("dd-MMM-yyyy") : null)
+                                          ?? GetValue(9);
+
                     feedbackOnlyRows.Add(new SheetsFeedbackDto
                     {
                         Id              = rowId,
@@ -219,10 +239,10 @@ namespace RizvizERP.API.Controllers
                         InterviewerName = finalInterviewer,
                         CompanyName     = finalCompany,
                         InterviewType   = finalType,
-                        Status          = finalStatus,
-                        InvTo           = finalInvTo,
-                        InterviewFor    = finalInterviewFor,
-                        JobStartDate    = finalJobStartDate,
+                        Status          = resolvedStatus,
+                        InvTo           = resolvedInvTo,
+                        InterviewFor    = resolvedInterviewFor,
+                        JobStartDate    = resolvedJobStart,
                         Stack           = match?.Stack,
                         EnglishFeedback = GetValue(18),
                         Recommendation  = GetValue(19)
@@ -372,6 +392,44 @@ namespace RizvizERP.API.Controllers
                 }
 
                 // ── 1. Save to DB ─────────────────────────────────────────────
+                // Try to enrich missing interview metadata from the DB Interviews
+                // table, so Status/InvTo/InterviewFor/JobStartDate are always stored.
+                string resolvedStatus     = model.Status;
+                string resolvedInvTo      = model.InvTo;
+                string resolvedInterviewFor = model.InterviewFor;
+                DateTime? resolvedJobStartDate = model.JobStartDate;
+                DateTime? resolvedJobCloseDate = model.JobCloseDate;
+
+                if (model.Sr.HasValue && model.Sr.Value > 0)
+                {
+                    var matchedInterview = await _context.Interviews
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(i => i.Sr == model.Sr.Value);
+
+                    if (matchedInterview == null)
+                    {
+                        // Fallback: match by interviewee name + company
+                        var nameLower    = (model.IntervieweeName ?? "").Trim().ToLower();
+                        var companyLower = (model.CompanyName ?? "").Trim().ToLower();
+                        matchedInterview = await _context.Interviews
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(i =>
+                                i.IntervieweeName != null &&
+                                i.IntervieweeName.ToLower() == nameLower &&
+                                i.CompanyName != null &&
+                                i.CompanyName.ToLower() == companyLower);
+                    }
+
+                    if (matchedInterview != null)
+                    {
+                        resolvedStatus       = resolvedStatus       ?? matchedInterview.Status;
+                        resolvedInvTo        = resolvedInvTo        ?? matchedInterview.InvTo;
+                        resolvedInterviewFor = resolvedInterviewFor ?? matchedInterview.InterviewFor;
+                        resolvedJobStartDate = resolvedJobStartDate ?? matchedInterview.JobStartDate;
+                        resolvedJobCloseDate = resolvedJobCloseDate ?? matchedInterview.JobCloseDate;
+                    }
+                }
+
                 var feedback = new InterviewFeedback
                 {
                     Sr              = model.Sr,
@@ -391,6 +449,11 @@ namespace RizvizERP.API.Controllers
                     Rating          = model.Rating,
                     FeedbackBy      = model.FeedbackBy,
                     FeedbackDate    = model.FeedbackDate,
+                    Status          = resolvedStatus,
+                    InvTo           = resolvedInvTo,
+                    InterviewFor    = resolvedInterviewFor,
+                    JobStartDate    = resolvedJobStartDate,
+                    JobCloseDate    = resolvedJobCloseDate,
                     CreatedAt       = DateTime.UtcNow
                 };
 
@@ -706,6 +769,14 @@ namespace RizvizERP.API.Controllers
         public int Rating { get; set; }
         public string FeedbackBy { get; set; }
         public string FeedbackDate { get; set; }
+
+        // ── Interview metadata (sent by frontend from the selected interview) ──
+        // Stored in DB so GET /api/feedback can show these without needing Excel.
+        public string Status { get; set; }
+        public string InvTo { get; set; }
+        public string InterviewFor { get; set; }
+        public DateTime? JobStartDate { get; set; }
+        public DateTime? JobCloseDate { get; set; }
     }
 
     public class SheetsFeedbackDto

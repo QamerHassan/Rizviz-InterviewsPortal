@@ -40,13 +40,13 @@ namespace RizvizERP.API.Services
             _sheetsService = sheetsService;
         }
 
-        public InterviewSyncResultDto SyncFromExcel(string changedBy = "ExcelSync", bool? replaceAll = null)
+        public InterviewSyncResultDto SyncFromExcel(string changedBy = "ExcelSync", bool? replaceAll = null, string uploadFilePath = null)
         {
             var doReplaceAll = replaceAll ?? _settings.ReplaceAllOnRefresh;
             var result = new InterviewSyncResultDto
             {
                 SyncedAt = DateTime.UtcNow,
-                SourcePath = _settings.NetworkFilePath
+                SourcePath = uploadFilePath ?? _settings.NetworkFilePath
             };
 
             if (UatSchemaConfiguration.IsEnabled && UatSchemaConfiguration.UseLiveInterviewsView && !UatSchemaConfiguration.UseExcelSyncedInterviews)
@@ -57,7 +57,7 @@ namespace RizvizERP.API.Services
                 return result;
             }
 
-            var sourcePath = ResolveSourcePath();
+            var sourcePath = uploadFilePath ?? ResolveSourcePath();
             result.SourcePath = sourcePath;
 
             if (!File.Exists(sourcePath))
@@ -75,7 +75,8 @@ namespace RizvizERP.API.Services
             // Efficient early-exit: skip full parse when called by AutoSync and file hasn't changed
             if (string.Equals(changedBy, "AutoSync", StringComparison.OrdinalIgnoreCase)
                 && _lastKnownModifiedTime.HasValue
-                && _lastKnownModifiedTime.Value == currentModifiedTime)
+                && _lastKnownModifiedTime.Value == currentModifiedTime
+                && string.IsNullOrEmpty(uploadFilePath))
             {
                 result.Message = "No file changes detected — skipping sync.";
                 result.UnchangedRows = -1; // sentinel so caller knows we skipped

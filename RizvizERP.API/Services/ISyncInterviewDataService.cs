@@ -5,7 +5,7 @@ namespace RizvizERP.API.Services
 {
     public interface ISyncInterviewDataService
     {
-        InterviewSyncResultDto SyncFromExcel(string changedBy = "ExcelSync", bool? replaceAll = null);
+        InterviewSyncResultDto SyncFromExcel(string changedBy = "ExcelSync", bool? replaceAll = null, string uploadFilePath = null);
         InterviewSyncStatusDto GetSyncStatus();
         List<InterviewHistoryDto> GetInterviewHistory(int interviewId);
     }

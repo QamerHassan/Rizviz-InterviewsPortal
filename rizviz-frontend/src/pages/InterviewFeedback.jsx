@@ -104,6 +104,8 @@ const InterviewFeedback = () => {
 
   // Local filter state for dropdowns
   const [selectedInterviewer, setSelectedInterviewer] = useState(null);
+  // Full interview row selected via Sr dropdown — used to pass metadata to backend
+  const [selectedInterviewRow, setSelectedInterviewRow] = useState(null);
 
   // Interviewees filtered by selected interviewer
   const filteredInterviewees = useMemo(() => {
@@ -271,6 +273,7 @@ const InterviewFeedback = () => {
 
   const handleSrChange = (val) => {
     const row = allInterviews.find(r => r.sr === parseInt(val, 10));
+    setSelectedInterviewRow(row || null);
     if (row) {
       const defaultName = loggedInUserName || localStorage.getItem('interviewName') || '';
       form.setFieldsValue({
@@ -447,6 +450,12 @@ const InterviewFeedback = () => {
                             ? values.interviewDate.format('YYYY-MM-DD')
                             : new Date().toISOString().split('T')[0],
         audioFileUrl: uploadedAudioUrl || '',
+        // ── Interview metadata — stored in DB so Status/InvTo/etc. never show empty
+        status: selectedInterviewRow?.status || null,
+        invTo: selectedInterviewRow?.invTo || null,
+        interviewFor: selectedInterviewRow?.interviewer || null,
+        jobStartDate: selectedInterviewRow?.jobStartDate || null,
+        jobCloseDate: selectedInterviewRow?.jobCloseDate || null,
       };
 
       console.log("Submitting feedback for Sr:", payload.sr);

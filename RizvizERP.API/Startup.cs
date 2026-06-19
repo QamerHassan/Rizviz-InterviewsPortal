@@ -308,11 +308,57 @@ namespace RizvizERP.API
                                 [strengths]        NVARCHAR(MAX) NULL,
                                 [weaknesses]       NVARCHAR(MAX) NULL,
                                 [recommendation]   NVARCHAR(50) NULL,
-                                [created_at]       DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+                                [rating]           INT NOT NULL DEFAULT 0,
+                                [feedback_by]      NVARCHAR(255) NULL,
+                                [feedback_date]    NVARCHAR(50) NULL,
+                                [sr]               INT NULL,
+                                [created_at]       DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                                [status]           NVARCHAR(100) NULL,
+                                [inv_to]           NVARCHAR(100) NULL,
+                                [interview_for]    NVARCHAR(500) NULL,
+                                [job_start_date]   DATE NULL,
+                                [job_close_date]   DATE NULL
                             );
                         END
                     ";
                     context.Database.ExecuteSqlRaw(feedbackTableSql);
+
+                    // ── Add new columns to existing interview_feedback table (idempotent) ──
+                    var alterFeedbackSql = @"
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'status')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [status] NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'inv_to')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [inv_to] NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'interview_for')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [interview_for] NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'job_start_date')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [job_start_date] DATE NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'job_close_date')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [job_close_date] DATE NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'rating')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [rating] INT NOT NULL DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'feedback_by')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [feedback_by] NVARCHAR(255) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'feedback_date')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [feedback_date] NVARCHAR(50) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[interview_feedback]') AND name = 'sr')
+                            ALTER TABLE [dbo].[interview_feedback] ADD [sr] INT NULL;
+
+                        -- Backfill known existing rows with interview metadata
+                        UPDATE [dbo].[interview_feedback] SET status='Converted', inv_to='Silmun', interview_for='Rehan Ahmad (EXE) Co Azfer' WHERE sr=4472 AND status IS NULL;
+                        UPDATE [dbo].[interview_feedback] SET status='Cancelled', inv_to='Silmun', interview_for='Anna Zaidi', job_start_date='2026-04-21' WHERE sr=4576 AND status IS NULL;
+                        UPDATE [dbo].[interview_feedback] SET status='Cancelled', inv_to='Silmun', interview_for='Furqan Saeed' WHERE sr=4707 AND status IS NULL;
+                        UPDATE [dbo].[interview_feedback] SET status='Passed',    inv_to='Silmun', interview_for='Abbas Zaidi'  WHERE sr=5755 AND status IS NULL;
+                    ";
+                    context.Database.ExecuteSqlRaw(alterFeedbackSql);
                 }
 
                 if (!context.Database.CanConnect())

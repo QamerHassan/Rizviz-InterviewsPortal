@@ -352,6 +352,66 @@ namespace RizvizERP.API.Controllers
             }
         }
 
+        [HttpPost("sync-upload")]
+        public IActionResult SyncUploadedExcel([FromForm] Microsoft.AspNetCore.Http.IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "No file uploaded." });
+
+            if (IsLiveUatReadOnly)
+                return BadRequest(new { message = "Live UAT interviews cannot be modified. Data is loaded from mkt.interview_master / interview_detail." });
+
+            string tempPath = null;
+            try
+            {
+                var originalExt = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
+                if (string.IsNullOrEmpty(originalExt)) originalExt = ".xlsx";
+
+                tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + originalExt);
+                using (var stream = new FileStream(tempPath, FileMode.Create))
+                {
+                    file.CopyTo(stream);
+                }
+
+                var result = _syncService.SyncFromExcel("ManualUploadSync", replaceAll: false, uploadFilePath: tempPath);
+                
+                return Ok(new
+                {
+                    totalRows = result.TotalRows,
+                    insertedRows = result.InsertedRows,
+                    updatedRows = result.UpdatedRows,
+                    unchangedRows = result.UnchangedRows,
+                    failedRows = result.FailedRows,
+                    syncedAt = result.SyncedAt,
+                    message = result.Message,
+                    errors = result.Errors,
+                    changes = result.Changes.Select(c => new
+                    {
+                        c.Sr,
+                        c.IntervieweeName,
+                        c.CompanyName,
+                        c.ChangeType,
+                        c.Summary,
+                        c.FieldChanges,
+                        c.OldRow,
+                        c.NewRow,
+                        c.RowFields
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+            finally
+            {
+                if (tempPath != null && System.IO.File.Exists(tempPath))
+                {
+                    try { System.IO.File.Delete(tempPath); } catch {}
+                }
+            }
+        }
+
         [HttpGet("sync-status")]
         public IActionResult GetSyncStatus()
         {

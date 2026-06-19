@@ -74,5 +74,28 @@ namespace RizvizERP.API.Models
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // ── Interview metadata stored at feedback-save time ──────────────────
+        // These fields mirror the matching Interview row so GET /api/feedback
+        // can display Status, InvTo, etc. even when the Excel file is not
+        // present on the production server (Railway).
+
+        [Column("status")]
+        [StringLength(100)]
+        public string Status { get; set; }
+
+        [Column("inv_to")]
+        [StringLength(100)]
+        public string InvTo { get; set; }
+
+        [Column("interview_for")]
+        [StringLength(500)]
+        public string InterviewFor { get; set; }
+
+        [Column("job_start_date", TypeName = "date")]
+        public DateTime? JobStartDate { get; set; }
+
+        [Column("job_close_date", TypeName = "date")]
+        public DateTime? JobCloseDate { get; set; }
     }
 }
