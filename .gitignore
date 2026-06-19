@@ -17,8 +17,9 @@ RizvizERP.API/*.user
 .env
 *.env
 RizvizERP.API/google-credentials.json
-# credentials.json IS tracked — needed by Google Sheets in production
-# RizvizERP.API/credentials*.json
+# credentials.json contains a Google service account key — injected at runtime
+# via GOOGLE_CREDENTIALS_JSON env var (see GoogleSheetsService)
+RizvizERP.API/credentials*.json
 RizvizERP.API/*.pfx
 RizvizERP.API/*.p12
 

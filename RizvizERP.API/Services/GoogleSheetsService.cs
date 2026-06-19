@@ -28,6 +28,38 @@ namespace RizvizERP.API.Services
             _logger = logger;
         }
 
+        // ── Credential helper: file path first, then env-var JSON ────────────
+        private async Task<GoogleCredential> GetCredentialAsync()
+        {
+            var credPath = _config["GoogleSheets:CredentialsPath"] ?? "credentials.json";
+            if (File.Exists(credPath))
+            {
+                await using var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read);
+                return GoogleCredential.FromStream(stream).CreateScoped(Scopes);
+            }
+
+            // Fallback: load from environment variable (Railway secret)
+            var credJson = Environment.GetEnvironmentVariable("GOOGLE_CREDENTIALS_JSON")
+                        ?? _config["GoogleSheets:CredentialsJson"];
+            if (!string.IsNullOrWhiteSpace(credJson))
+            {
+                using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(credJson));
+                return GoogleCredential.FromStream(ms).CreateScoped(Scopes);
+            }
+
+            throw new FileNotFoundException(
+                $"Google credentials not found. Set GOOGLE_CREDENTIALS_JSON env var or place credentials.json at '{credPath}'.");
+        }
+
+        private bool HasCredentials()
+        {
+            var credPath = _config["GoogleSheets:CredentialsPath"] ?? "credentials.json";
+            if (File.Exists(credPath)) return true;
+            var credJson = Environment.GetEnvironmentVariable("GOOGLE_CREDENTIALS_JSON")
+                        ?? _config["GoogleSheets:CredentialsJson"];
+            return !string.IsNullOrWhiteSpace(credJson);
+        }
+
         public async Task<(bool Success, string Error)> AppendFeedbackAsync(GeneralFeedback feedback)
         {
             var credPath = _config["GoogleSheets:CredentialsPath"];
@@ -35,17 +67,16 @@ namespace RizvizERP.API.Services
             var sheetName = _config["GoogleSheets:GeneralSheetName"] ?? "General Feedback";
 
             // ── Guard: missing configuration ─────────────────────────────────
-            if (string.IsNullOrWhiteSpace(credPath) || string.IsNullOrWhiteSpace(spreadsheetId))
+            if (string.IsNullOrWhiteSpace(spreadsheetId))
             {
-                const string msg = "Google Sheets not configured (missing CredentialsPath or SpreadsheetId). " +
-                                   "Skipping sheet sync.";
+                const string msg = "Google Sheets not configured (missing SpreadsheetId). Skipping sheet sync.";
                 _logger.LogWarning(msg);
                 return (false, msg);
             }
 
-            if (!File.Exists(credPath))
+            if (!HasCredentials())
             {
-                var msg = $"credentials.json not found at '{credPath}'. Skipping sheet sync.";
+                const string msg = "Google credentials not available (no credentials.json and GOOGLE_CREDENTIALS_JSON env var not set). Skipping sheet sync.";
                 _logger.LogWarning(msg);
                 return (false, msg);
             }
@@ -59,13 +90,7 @@ namespace RizvizERP.API.Services
                 try
                 {
                     // Build authenticated Sheets service
-                    GoogleCredential credential;
-                    await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                    {
-                        credential = GoogleCredential
-                            .FromStream(stream)
-                            .CreateScoped(Scopes);
-                    }
+                    var credential = await GetCredentialAsync();
 
                     var service = new SheetsService(new BaseClientService.Initializer
                     {
@@ -124,16 +149,16 @@ namespace RizvizERP.API.Services
             var spreadsheetId = _config["GoogleSheets:SpreadsheetId"];
             var sheetName = _config["GoogleSheets:SheetName"] ?? "Sheet1";
 
-            if (string.IsNullOrWhiteSpace(credPath) || string.IsNullOrWhiteSpace(spreadsheetId))
+            if (string.IsNullOrWhiteSpace(spreadsheetId))
             {
-                const string msg = "Google Sheets not configured (missing CredentialsPath or SpreadsheetId). skipping sync.";
+                const string msg = "Google Sheets not configured (missing SpreadsheetId). Skipping sync.";
                 _logger.LogWarning(msg);
                 return (false, msg);
             }
 
-            if (!File.Exists(credPath))
+            if (!HasCredentials())
             {
-                var msg = $"credentials.json not found at '{credPath}'. skipping sync.";
+                const string msg = "Google credentials not available. Skipping sync.";
                 _logger.LogWarning(msg);
                 return (false, msg);
             }
@@ -145,11 +170,7 @@ namespace RizvizERP.API.Services
             {
                 try
                 {
-                    GoogleCredential credential;
-                    await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                    {
-                        credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                    }
+                    var credential = await GetCredentialAsync();
 
                     var service = new SheetsService(new BaseClientService.Initializer
                     {
