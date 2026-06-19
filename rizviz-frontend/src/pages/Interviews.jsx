@@ -284,6 +284,37 @@ const Interviews = () => {
   );
 
   const handleRefreshFromExcel = async () => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (!isLocalhost) {
+      // Production mode: Just fetch the last sync result details from database/memory cache
+      const hide = message.loading('Fetching last sync result...', 0);
+      try {
+        const result = await triggerGetLastSyncResult().unwrap();
+        hide();
+        setSyncSummary(result);
+        const bySr = {};
+        (result.changes || []).forEach((c) => {
+          const sr = c.sr ?? c.Sr;
+          if (sr != null) bySr[sr] = c;
+        });
+        setLastChangeBySr(bySr);
+        setSyncModalOpen(true);
+        const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
+                        (result.insertedRows ?? result.InsertedRows ?? 0);
+        if (changed > 0) {
+          message.success(`Loaded last sync summary (${changed} changes).`);
+        } else {
+          message.info(result.message || 'No changes were recorded in the last sync.');
+        }
+      } catch (err) {
+        hide();
+        message.error('Failed to retrieve last sync result.');
+      }
+      return;
+    }
+
+    // Localhost mode: Perform actual local server-side file sync
     // Step 1: Fetch the latest sync status to get the server-side file fingerprint
     const statusResult = await refetchSyncStatus();
     const latestStatus = statusResult?.data ?? syncStatus;

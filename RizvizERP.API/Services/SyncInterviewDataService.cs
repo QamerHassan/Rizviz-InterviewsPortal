@@ -361,9 +361,45 @@ namespace RizvizERP.API.Services
 
         public InterviewSyncResultDto GetLastSyncResult()
         {
-            return _lastSyncResult ?? new InterviewSyncResultDto
+            if (_lastSyncResult != null)
             {
-                Message = "No synchronization has occurred since server startup.",
+                return _lastSyncResult;
+            }
+
+            // Fallback: Read from the database log table
+            InterviewSyncLog last = null;
+            try
+            {
+                last = _context.InterviewSyncLogs
+                    .OrderByDescending(x => x.SyncedAt)
+                    .FirstOrDefault();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not read last interview sync log from DB");
+            }
+
+            if (last != null)
+            {
+                return new InterviewSyncResultDto
+                {
+                    TotalRows = last.TotalRows,
+                    InsertedRows = last.InsertedRows,
+                    UpdatedRows = last.UpdatedRows,
+                    UnchangedRows = last.UnchangedRows,
+                    FailedRows = last.FailedRows,
+                    SyncedAt = last.SyncedAt,
+                    SourcePath = last.SourcePath,
+                    Message = string.IsNullOrWhiteSpace(last.ErrorMessage) 
+                        ? "Details are loaded from the database log. Detailed field-level diffs are not available because the server recently restarted." 
+                        : last.ErrorMessage,
+                    Changes = new List<InterviewSyncChangeDto>()
+                };
+            }
+
+            return new InterviewSyncResultDto
+            {
+                Message = "No synchronization has occurred yet.",
                 SyncedAt = DateTime.UtcNow
             };
         }
