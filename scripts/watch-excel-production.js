@@ -5,34 +5,55 @@ const https = require('https');
 
 const targetUrl = process.argv[2] || 'https://rizviz-interviewsportal-production.up.railway.app/api/interviews/sync-upload';
 const filePath = path.resolve(__dirname, '..', 'Interview Software.xlsx');
+const POLL_INTERVAL_MS = 3000; // Check every 3 seconds
 
 if (!fs.existsSync(filePath)) {
   console.error(`Error: Excel file not found at ${filePath}`);
   process.exit(1);
 }
 
-console.log(`Monitoring file: ${filePath}`);
-console.log(`Uploading updates to: ${targetUrl}`);
+console.log(`\x1b[36mMonitoring file:\x1b[0m ${filePath}`);
+console.log(`\x1b[36mUploading updates to:\x1b[0m ${targetUrl}`);
+console.log(`\x1b[33mPolling every ${POLL_INTERVAL_MS / 1000}s — saves to Excel will auto-sync to production.\x1b[0m`);
 console.log('Press Ctrl+C to stop watching.\n');
 
-let lastEventTime = 0;
+// Get the initial mtime so we don't upload on startup
+let lastMtime = fs.statSync(filePath).mtimeMs;
+console.log(`\x1b[90mBaseline file time: ${new Date(lastMtime).toLocaleTimeString()}\x1b[0m\n`);
 
-fs.watch(filePath, (eventType) => {
-  if (eventType === 'change') {
-    const now = Date.now();
-    if (now - lastEventTime > 2000) {
-      lastEventTime = now;
-      console.log(`[${new Date().toLocaleTimeString()}] Change detected! Preparing upload...`);
+let uploadInProgress = false;
 
-      // Small delay to allow Excel to release file handle lock
+setInterval(() => {
+  try {
+    // If file was deleted/locked just skip this tick
+    if (!fs.existsSync(filePath)) return;
+
+    const currentMtime = fs.statSync(filePath).mtimeMs;
+
+    if (currentMtime !== lastMtime) {
+      lastMtime = currentMtime;
+
+      if (uploadInProgress) {
+        console.log(`\x1b[33m[${new Date().toLocaleTimeString()}] Change detected but upload in progress — will catch next poll.\x1b[0m`);
+        return;
+      }
+
+      console.log(`\x1b[32m[${new Date().toLocaleTimeString()}] File changed! Uploading to production...\x1b[0m`);
+      uploadInProgress = true;
+
+      // Small delay to make sure Excel has finished writing
       setTimeout(() => {
-        uploadFile(filePath, targetUrl);
-      }, 500);
+        uploadFile(filePath, targetUrl, () => {
+          uploadInProgress = false;
+        });
+      }, 800);
     }
+  } catch (err) {
+    // Ignore stat errors (file locked by Excel during save)
   }
-});
+}, POLL_INTERVAL_MS);
 
-function uploadFile(file, url) {
+function uploadFile(file, url, onDone) {
   try {
     const fileBuffer = fs.readFileSync(file);
     const fileName = path.basename(file);
@@ -53,52 +74,65 @@ function uploadFile(file, url) {
       headers: {
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
         'Content-Length': postData.length
-      }
+      },
+      timeout: 60000
     };
 
     const client = urlObj.protocol === 'https:' ? https : http;
 
-    console.log('Uploading file...');
     const req = client.request(options, (res) => {
       let responseBody = '';
-      res.on('data', (chunk) => {
-        responseBody += chunk;
-      });
+      res.on('data', (chunk) => { responseBody += chunk; });
 
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try {
             const data = JSON.parse(responseBody);
-            console.log('\x1b[32mSync successful!\x1b[0m');
-            console.log(`Message: ${data.message}`);
-            console.log(`Inserted: ${data.insertedRows} | Updated: ${data.updatedRows} | Unchanged: ${data.unchangedRows}`);
-            if (data.changes && data.changes.length > 0) {
-              console.log('Changes dispatched:');
-              data.changes.forEach((c) => {
-                console.log(` - [${c.changeType}] ${c.intervieweeName} @ ${c.companyName}: ${c.summary}`);
-              });
+            const hasChanges = (data.insertedRows || 0) + (data.updatedRows || 0) > 0;
+
+            if (hasChanges) {
+              console.log(`\x1b[32m✅ Sync complete — ${data.insertedRows} inserted, ${data.updatedRows} updated, ${data.unchangedRows} unchanged.\x1b[0m`);
+              if (data.changes && data.changes.length > 0) {
+                console.log('\x1b[36mChanges:\x1b[0m');
+                data.changes.forEach((c) => {
+                  console.log(`  \x1b[33m[${c.changeType}]\x1b[0m ${c.intervieweeName} @ ${c.companyName}: ${c.summary}`);
+                });
+              }
+              console.log('\x1b[32m🔔 SignalR notifications sent to connected users.\x1b[0m');
+            } else {
+              console.log(`\x1b[90m[${new Date().toLocaleTimeString()}] Sync done — no data changes (${data.unchangedRows} unchanged). File metadata changed.\x1b[0m`);
             }
           } catch (e) {
-            console.log('\x1b[32mUpload finished with status:\x1b[0m', res.statusCode);
-            console.log('Raw Response:', responseBody);
+            console.log('Upload finished. Status:', res.statusCode);
+            console.log('Response:', responseBody.slice(0, 300));
           }
         } else {
-          console.error('\x1b[31mUpload failed:\x1b[0m', res.statusCode, res.statusMessage);
-          console.error('Response details:', responseBody);
+          console.error(`\x1b[31mUpload failed: HTTP ${res.statusCode}\x1b[0m`);
+          console.error('Details:', responseBody.slice(0, 500));
         }
-        console.log('\nWaiting for next change...');
+        console.log('');
+        onDone();
       });
     });
 
     req.on('error', (err) => {
-      console.error('\x1b[31mUpload request error:\x1b[0m', err.message);
-      console.log('\nWaiting for next change...');
+      console.error(`\x1b[31mNetwork error:\x1b[0m`, err.message);
+      console.log('');
+      onDone();
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      console.error('\x1b[31mRequest timed out after 60s\x1b[0m');
+      console.log('');
+      onDone();
     });
 
     req.write(postData);
     req.end();
   } catch (err) {
-    console.error('\x1b[31mError reading file:\x1b[0m', err.message);
-    console.log('\nWaiting for next change...');
+    console.error(`\x1b[31mError reading file:\x1b[0m`, err.message);
+    console.log('');
+    onDone();
   }
 }
