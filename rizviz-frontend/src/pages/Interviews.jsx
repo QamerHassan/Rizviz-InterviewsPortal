@@ -21,6 +21,7 @@ import {
   useUpdateInterviewMutation,
   useDeleteInterviewMutation,
   useSeedInterviewsMutation,
+  useSyncUploadInterviewsMutation,
   useRefreshInterviewsFromExcelMutation,
   useGetInterviewSyncStatusQuery,
   useGetInterviewHistoryQuery,
@@ -274,6 +275,7 @@ const Interviews = () => {
   const [updateInterview, { isLoading: isUpdating }] = useUpdateInterviewMutation();
   const [deleteInterview] = useDeleteInterviewMutation();
   const [seedInterviews, { isLoading: isSeeding }] = useSeedInterviewsMutation();
+  const [syncUploadInterviews, { isLoading: isSyncUploading }] = useSyncUploadInterviewsMutation();
   const [refreshFromExcel, { isLoading: isSyncing }] = useRefreshInterviewsFromExcelMutation();
   const { data: historyRows = [], isFetching: historyLoading } = useGetInterviewHistoryQuery(
     historyInterview?.Id,
@@ -340,17 +342,31 @@ const Interviews = () => {
   const handleUpload = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const hide = message.loading('Replacing data from your file...', 0);
+    const hide = message.loading('Syncing data from your file...', 0);
     try {
-      const res = await seedInterviews(formData).unwrap();
+      const result = await syncUploadInterviews(formData).unwrap();
       hide();
-      message.success(res.message || `Imported ${res.count} rows from Excel/CSV.`);
+      setSyncSummary(result);
+      const bySr = {};
+      (result.changes || []).forEach((c) => {
+        const sr = c.sr ?? c.Sr;
+        if (sr != null) bySr[sr] = c;
+      });
+      setLastChangeBySr(bySr);
+      setSyncModalOpen(true);
+      const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
+                      (result.insertedRows ?? result.InsertedRows ?? 0);
+      message.success(
+        changed > 0
+          ? `${changed} row(s) updated from your file. See sync summary for details.`
+          : (result.message || 'Data synced successfully.')
+      );
       refetchStats();
       refetchPaged();
       refetchStatusBreakdown();
     } catch (err) {
       hide();
-      message.error(err?.data?.message || 'Upload failed.');
+      message.error(err?.data?.message || 'Upload sync failed. Check file structure and try again.');
     }
     return false;
   };
@@ -516,7 +532,7 @@ const Interviews = () => {
             </Radio.Group>
              {isAdmin && (
               <Upload accept=".csv,.xlsx,.xls" showUploadList={false} beforeUpload={handleUpload}>
-                <Button icon={<ImportOutlined />} loading={isSeeding}>Upload Excel</Button>
+                <Button icon={<ImportOutlined />} loading={isSyncUploading}>Upload Excel</Button>
               </Upload>
             )}
           </div>

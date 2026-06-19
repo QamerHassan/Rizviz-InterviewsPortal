@@ -405,6 +405,14 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Interviews'],
     }),
+    syncUploadInterviews: builder.mutation({
+      query: (formData) => ({
+        url: '/interviews/sync-upload',
+        method: 'POST',
+        body: formData,
+      }),
+      invalidatesTags: ['Interviews'],
+    }),
     seedQamerDemoWeek: builder.mutation({
       query: () => ({
         url: '/interviews/seed/qamer-demo',
@@ -561,6 +569,7 @@ export const {
   useUpdateInterviewMutation,
   useDeleteInterviewMutation,
   useSeedInterviewsMutation,
+  useSyncUploadInterviewsMutation,
   useSeedQamerDemoWeekMutation,
   useGetCandidateDetailQuery,
   useRefreshInterviewsFromExcelMutation,
