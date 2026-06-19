@@ -216,16 +216,20 @@ namespace RizvizERP.API.Services
                 ? originalToken.Substring(prefix.Length)
                 : "user";
 
+            var user = AuthHelper.GetUserByUsername(username);
+
             return new LoginResponse
             {
                 Token = prefix + username,
                 RefreshToken = "db_refresh_token_key_" + Guid.NewGuid().ToString("N"),
-                UserId = 1,
+                UserId = user?.Id ?? 1,
                 Username = username,
-                FullName = username,
-                Role = "HR",
-                CompanyCode = "RII",
-                BranchCode = "LHE"
+                FullName = user?.FullName ?? username,
+                Role = user?.RoleName ?? "HR",
+                InterviewName = user?.InterviewName,
+                CompanyCode = user?.CompanyCode ?? "RII",
+                BranchCode = user?.BranchCode ?? "LHE",
+                IsFirstLogin = user?.IsFirstLogin ?? false
             };
         }
 

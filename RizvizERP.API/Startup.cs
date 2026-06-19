@@ -53,11 +53,13 @@ namespace RizvizERP.API
             {
                 options.AddPolicy("CorsPolicy", policy =>
                 {
-                    policy.WithOrigins(
-                            "http://localhost:3000",
-                            "http://localhost:3001",
-                            "https://rizviz-interviews-portal.vercel.app"
-                        )
+                    var allowedOrigins = Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? new[]
+                    {
+                        "http://localhost:3000",
+                        "http://localhost:3001",
+                        "https://rizviz-interviews-portal.vercel.app"
+                    };
+                    policy.WithOrigins(allowedOrigins)
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
@@ -239,9 +241,9 @@ namespace RizvizERP.API
 
             // app.UseHttpsRedirection(); // Removed to prevent CORS preflight redirects from HTTP to HTTPS locally
 
-            app.UseStaticFiles(); // Serves wwwroot (audio-uploads folder)
-
             app.UseCors("CorsPolicy");
+
+            app.UseStaticFiles(); // Serves wwwroot (audio-uploads folder)
 
             app.UseRouting();
 

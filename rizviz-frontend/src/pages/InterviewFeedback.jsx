@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  Table, Card, Button, Input, Select, Tag, Modal, Form, 
+import {
+  Table, Card, Button, Input, Select, Tag, Modal, Form,
   App, Row, Col, DatePicker, Spin, Tooltip, Typography
 } from 'antd';
-import { 
+import {
   SearchOutlined, PlusOutlined, AudioOutlined,
   StopOutlined, PlayCircleOutlined, AudioMutedOutlined,
   RobotOutlined, SaveOutlined, ReloadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSelector } from 'react-redux';
-import { 
+import {
   useGetFeedbacksQuery,
-  useSaveFeedbackMutation, useDeleteFeedbackMutation 
+  useSaveFeedbackMutation, useDeleteFeedbackMutation,
+  useGetFeedbackDropdownsQuery
 } from '../store/apiSlice';
 import {
   interviewers as allInterviewers,
@@ -24,60 +25,7 @@ import {
 
 const { Option } = Select;
 const { TextArea } = Input;
-const { Title, Text } = Typography;
-
-const API_BASE_URL = 'http://localhost:5000/api/interviewfeedback';
-
-const saveFeedback = async (feedbackData) => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/feedback`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        sr: feedbackData.sr,
-        feedbackText: feedbackData.feedbackText,
-        rating: feedbackData.rating,
-        strengths: feedbackData.strengths,
-        weaknesses: feedbackData.weaknesses,
-        recommendation: feedbackData.recommendation,
-        feedbackBy: feedbackData.feedbackBy,
-        feedbackDate: feedbackData.feedbackDate ?? new Date().toISOString().split('T')[0],
-        aiProcessedFeedback: feedbackData.aiProcessedFeedback,
-      }),
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-      return { success: true, data: result };
-    } else {
-      return { success: false, error: result.message };
-    }
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-};
-
-const fetchInterviews = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/interviews`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-      return result;
-    } else {
-      return { success: false };
-    }
-  } catch (err) {
-    return { success: false };
-  }
-};
+const { Text } = Typography;
 
 const InterviewFeedback = () => {
   const { message } = App.useApp();
@@ -123,12 +71,20 @@ const InterviewFeedback = () => {
 
   // User's own interviews — the dropdown list for Sr selection
   const userInterviews = useMemo(() => {
-    if (!loggedInUserName) return allInterviews;
+    const rLower = role?.trim().toLowerCase();
+    const isStaff = rLower === 'admin' || rLower === 'hr' || rLower === 'manager' || rLower === 'employee';
+    if (isStaff || !loggedInUserName) return allInterviews;
+
     const nameLower = loggedInUserName.trim().toLowerCase();
+    if (role === 'Job Hunter') {
+      return allInterviews.filter(
+        item => item.jobHunter && item.jobHunter.trim().toLowerCase() === nameLower
+      );
+    }
     return allInterviews.filter(
-      r => r.interviewee && r.interviewee.trim().toLowerCase() === nameLower
+      item => item.interviewee && item.interviewee.trim().toLowerCase() === nameLower
     );
-  }, [loggedInUserName]);
+  }, [role, loggedInUserName]);
 
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -319,7 +275,7 @@ const InterviewFeedback = () => {
       const defaultName = loggedInUserName || localStorage.getItem('interviewName') || '';
       form.setFieldsValue({
         interviewerName: row.interviewer || undefined,
-        intervieweeName: defaultName || row.interviewee || undefined,
+        intervieweeName: row.interviewee || defaultName || undefined,
         companyName: row.company || undefined,
         interviewType: row.type || undefined,
         interviewDate: row.date ? dayjs(row.date) : undefined,
@@ -472,48 +428,39 @@ const InterviewFeedback = () => {
       const token = localStorage.getItem('token');
 
       const payload = {
-        // Core interview fields
-        sr:               values.sr ? parseInt(values.sr, 10) : null,
-        interviewerName:  values.interviewerName || '',
-        intervieweeName:  values.intervieweeName || '',
-        companyName:      values.companyName || '',
-        interviewType:    values.interviewType || '',
-        interviewDate:    values.interviewDate ? values.interviewDate.toISOString() : null,
-        // Feedback content
-        urduTranscript:   urduTranscript || '',
-        englishFeedback:  values.englishSummary || textVal || '',
-        communication:    '',
-        technicalSkills:  '',
-        strengths:        values.strengths || '',
-        weaknesses:       values.weaknesses || '',
-        recommendation:   values.recommendation || 'Recommended',
-        // Google Sheets extra fields
-        rating:           values.rating ? parseInt(values.rating, 10) : 0,
-        feedbackBy:       values.interviewerName || '',
-        feedbackDate:     values.interviewDate
+        sr: values.sr ? parseInt(values.sr, 10) : null,
+        interviewerName: values.interviewerName || '',
+        intervieweeName: values.intervieweeName || '',
+        companyName: values.companyName || '',
+        interviewType: values.interviewType || '',
+        interviewDate: values.interviewDate ? values.interviewDate.toISOString() : null,
+        urduTranscript: urduTranscript || '',
+        englishFeedback: values.englishSummary || textVal || '',
+        communication: '',
+        technicalSkills: '',
+        strengths: values.strengths || '',
+        weaknesses: values.weaknesses || '',
+        recommendation: values.recommendation || 'Recommended',
+        rating: values.rating ? parseInt(values.rating, 10) : 0,
+        feedbackBy: values.interviewerName || '',
+        feedbackDate: values.interviewDate
                             ? values.interviewDate.format('YYYY-MM-DD')
                             : new Date().toISOString().split('T')[0],
-        audioFileUrl:     audioUrl || '',
+        audioFileUrl: uploadedAudioUrl || '',
       };
 
       console.log("Submitting feedback for Sr:", payload.sr);
 
-      const res = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/feedback`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      let responseResult;
+      try {
+        responseResult = await saveFeedbackMutation(payload).unwrap();
+      } catch (err) {
+        message.error(err?.data?.message || 'Failed to save feedback');
+        return;
+      }
 
-      const result = await res.json();
-
-      if (res.ok && result.success) {
-        if (result.sheetSynced) {
+      if (responseResult?.success) {
+        if (responseResult.sheetSynced) {
           message.success('Feedback saved and synced to Google Sheets! ✅');
         } else {
           message.warning('Saved to database, but Google Sheet sync failed. It will retry automatically.');
@@ -521,7 +468,7 @@ const InterviewFeedback = () => {
         setIsModalOpen(false);
         refetch();
       } else {
-        message.error(result.message || 'Failed to save feedback');
+        message.error(responseResult?.message || 'Failed to save feedback');
       }
     } catch (err) {
       message.error(err.message || 'Failed to save feedback');

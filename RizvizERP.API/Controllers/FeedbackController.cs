@@ -331,7 +331,7 @@ namespace RizvizERP.API.Controllers
         }
 
         // ─── GET /api/feedback/{id} ──────────────────────────────────────────
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public IActionResult GetById(int id)
         {
             var user = GetCurrentUser();
@@ -485,7 +485,13 @@ namespace RizvizERP.API.Controllers
 
             var apiKey = _config["AI:GroqKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
-                return BadRequest(new { message = "Groq API key not configured. Add 'AI:GroqKey' to appsettings.json" });
+            {
+                apiKey = Environment.GetEnvironmentVariable("AI__GroqKey") ?? Environment.GetEnvironmentVariable("GROQ_API_KEY");
+            }
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return BadRequest(new { message = "AI GroqKey is not configured." });
+            }
 
             try
             {
@@ -501,20 +507,28 @@ namespace RizvizERP.API.Controllers
                 var audioFileUrl = $"/audio-uploads/{fileName}";
 
                 // Call Groq API (Whisper)
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                var activeKey = apiKey;
 
-                using var formData = new MultipartFormDataContent();
-                await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                var streamContent = new StreamContent(fileStream);
-                streamContent.Headers.ContentType = new MediaTypeHeaderValue(audio.ContentType ?? "audio/webm");
-                formData.Add(streamContent, "file", fileName);
-                formData.Add(new StringContent("whisper-large-v3"), "model");
-                formData.Add(new StringContent("ur"), "language"); // Urdu
-                formData.Add(new StringContent("text"), "response_format");
+                async Task<(HttpResponseMessage response, string responseBody)> DoTranscriptionAsync(string keyToUse)
+                {
+                    var client = _httpClientFactory.CreateClient();
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", keyToUse);
 
-                var response = await client.PostAsync("https://api.groq.com/openai/v1/audio/transcriptions", formData);
-                var responseBody = await response.Content.ReadAsStringAsync();
+                    using var formData = new MultipartFormDataContent();
+                    using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+                    var streamContent = new StreamContent(fileStream);
+                    streamContent.Headers.ContentType = new MediaTypeHeaderValue(audio.ContentType ?? "audio/webm");
+                    formData.Add(streamContent, "file", fileName);
+                    formData.Add(new StringContent("whisper-large-v3"), "model");
+                    formData.Add(new StringContent("ur"), "language"); // Urdu
+                    formData.Add(new StringContent("text"), "response_format");
+
+                    var response = await client.PostAsync("https://api.groq.com/openai/v1/audio/transcriptions", formData);
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    return (response, responseBody);
+                }
+
+                var (response, responseBody) = await DoTranscriptionAsync(activeKey);
 
                 if (!response.IsSuccessStatusCode)
                     return StatusCode(500, new { error = $"Groq API error ({response.StatusCode})", detail = responseBody });
@@ -538,7 +552,13 @@ namespace RizvizERP.API.Controllers
             {
                 var groqKey = _config["AI:GroqKey"];
                 if (string.IsNullOrEmpty(groqKey))
-                    return BadRequest(new { error = "Groq API key not configured" });
+                {
+                    groqKey = Environment.GetEnvironmentVariable("AI__GroqKey") ?? Environment.GetEnvironmentVariable("GROQ_API_KEY");
+                }
+                if (string.IsNullOrWhiteSpace(groqKey))
+                {
+                    return BadRequest(new { message = "AI GroqKey is not configured." });
+                }
 
                 using var httpClient = new HttpClient();
                 httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {groqKey}");
@@ -569,20 +589,51 @@ namespace RizvizERP.API.Controllers
                 var responseString = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
-                    return StatusCode(500, new { error = "Groq error", detail = responseString });
+                {
+                    _logger.LogError("[Enhance] Groq API error ({Status}): {Body}", response.StatusCode, responseString);
+                    return StatusCode(500, new { error = "Groq API error", detail = responseString });
+                }
 
-                var groqResult = JsonSerializer.Deserialize<JsonElement>(responseString);
-                var translatedText = groqResult
-                    .GetProperty("choices")[0]
-                    .GetProperty("message")
-                    .GetProperty("content")
-                    .GetString()?.Trim();
+                _logger.LogInformation("[Enhance] Groq raw response: {Body}", responseString);
 
-                return Ok(new { translatedText });
+                try
+                {
+                    var groqResult = JsonSerializer.Deserialize<JsonElement>(responseString);
+
+                    if (!groqResult.TryGetProperty("choices", out var choices) ||
+                        choices.GetArrayLength() == 0)
+                    {
+                        _logger.LogError("[Enhance] Groq response missing 'choices': {Body}", responseString);
+                        return StatusCode(500, new { error = "Groq returned no choices", detail = responseString });
+                    }
+
+                    var firstChoice = choices[0];
+                    if (!firstChoice.TryGetProperty("message", out var message) ||
+                        !message.TryGetProperty("content", out var contentProp))
+                    {
+                        _logger.LogError("[Enhance] Groq response missing message.content: {Body}", responseString);
+                        return StatusCode(500, new { error = "Groq response format unexpected", detail = responseString });
+                    }
+
+                    var translatedText = contentProp.GetString()?.Trim();
+
+                    if (string.IsNullOrEmpty(translatedText))
+                    {
+                        _logger.LogWarning("[Enhance] Groq returned empty translation");
+                        return StatusCode(500, new { error = "Groq returned empty translation" });
+                    }
+
+                    return Ok(new { translatedText });
+                }
+                catch (JsonException jex)
+                {
+                    _logger.LogError(jex, "[Enhance] JSON parse error: {Body}", responseString);
+                    return StatusCode(500, new { error = "Failed to parse Groq response", detail = responseString });
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in feedback endpoint");
+                _logger.LogError(ex, "Error in enhance endpoint");
                 return StatusCode(500, new {
                     error = ex.Message,
                     detail = ex.InnerException?.Message

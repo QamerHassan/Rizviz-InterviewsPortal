@@ -92,8 +92,8 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
       return;
     }
 
-    const host = window.location.hostname;
-    const hubUrl = `http://${host}:5000/hubs/notifications`;
+    const apiBase = (process.env.REACT_APP_API_URL || '').replace(/\/api\/?$/, '');
+    const hubUrl = `${apiBase}/hubs/notifications`;
 
     console.log(`[SignalR] 🔌 Initializing connection to: ${hubUrl}`);
     console.log(`[SignalR] User context: username=${currentUsername} | role=${role} | interviewName='${interviewName}'`);

@@ -240,24 +240,7 @@ namespace RizvizERP.API.Services
             {
                 _logger.LogInformation("Appending to Google Sheets: {Data}", string.Join(", ", rowData));
 
-                var credPath = _config["GoogleSheets:CredentialsPath"];
-                if (string.IsNullOrWhiteSpace(credPath))
-                {
-                    credPath = "credentials.json";
-                }
-
-                if (!File.Exists(credPath))
-                {
-                    var msg = $"credentials.json not found at '{credPath}'. Skipping sheet sync.";
-                    _logger.LogWarning(msg);
-                    return (false, msg);
-                }
-
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                {
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                }
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
@@ -286,22 +269,9 @@ namespace RizvizERP.API.Services
 
         public async Task<IList<IList<object>>> ReadAllRowsAsync(string spreadsheetId, string sheetName)
         {
-            var credPath = _config["GoogleSheets:CredentialsPath"];
-            if (string.IsNullOrWhiteSpace(credPath)) credPath = "credentials.json";
-
-            if (!File.Exists(credPath))
-            {
-                _logger.LogWarning("[ReadAllRowsAsync] credentials.json not found at '{Path}'. Returning empty.", credPath);
-                return new List<IList<object>>();
-            }
-
             try
             {
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                {
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                }
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
@@ -427,23 +397,15 @@ namespace RizvizERP.API.Services
         private async Task<(bool Success, string Error)> AppendMasterSheetFeedbackRowAsync(
             InterviewFeedbackRow row, string feedbackText)
         {
-            var credPath = _config["GoogleSheets:CredentialsPath"] ?? "credentials.json";
             var spreadsheetId = _config["GoogleSheets:SpreadsheetId"];
             var sheetName = _config["GoogleSheets:SheetName"] ?? "Interview Feedback";
 
             if (string.IsNullOrWhiteSpace(spreadsheetId))
                 return (false, "Google Sheets SpreadsheetId not configured.");
 
-            if (!File.Exists(credPath))
-                return (false, $"credentials.json not found at '{credPath}'.");
-
             try
             {
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                {
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                }
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
@@ -490,11 +452,11 @@ namespace RizvizERP.API.Services
                     match?.JobCloseDate?.ToString("dd-MMM-yyyy") ?? "", // Column K (index 10, Job Close Date)
                     match?.FirstSalary ?? "", // Column L (index 11, 1st Salary)
                     match?.JhSuggest ?? "", // Column M (index 12, JH Suggest)
-                    match?.InterviewCharges != 0 ? match.InterviewCharges.ToString("F2") : "", // Column N (index 13, Interview Charges)
-                    match?.JhDue != 0 ? match.JhDue.ToString("F2") : "", // Column O (index 14, JH Due)
-                    match?.FirstPaymentOnJob != 0 ? match.FirstPaymentOnJob.ToString("F2") : "", // Column P (index 15, 1st Pmnt on Job)
-                    match?.SecondPaymentOnJob != 0 ? match.SecondPaymentOnJob.ToString("F2") : "", // Column Q (index 16, 2nd Pmnt on Job)
-                    match?.BalancePayable != 0 ? match.BalancePayable.ToString("F2") : "", // Column R (index 17, Bal. Payable)
+                    (match != null && match.InterviewCharges != 0) ? match.InterviewCharges.ToString("F2") : "", // Column N (index 13, Interview Charges)
+                    (match != null && match.JhDue != 0) ? match.JhDue.ToString("F2") : "", // Column O (index 14, JH Due)
+                    (match != null && match.FirstPaymentOnJob != 0) ? match.FirstPaymentOnJob.ToString("F2") : "", // Column P (index 15, 1st Pmnt on Job)
+                    (match != null && match.SecondPaymentOnJob != 0) ? match.SecondPaymentOnJob.ToString("F2") : "", // Column Q (index 16, 2nd Pmnt on Job)
+                    (match != null && match.BalancePayable != 0) ? match.BalancePayable.ToString("F2") : "", // Column R (index 17, Bal. Payable)
                     feedbackText ?? "", // Column S (index 18, Feedback)
                     row.Recommendation ?? "", // Column T (index 19, Recommendation)
                     row.FeedbackDate ?? now.ToString("yyyy-MM-dd"), // Column U (index 20, Feedback Date)
@@ -525,20 +487,15 @@ namespace RizvizERP.API.Services
         /// </summary>
         public async Task<(bool Success, string Error)> ClearAndResetFeedbackSheetAsync()
         {
-            var credPath = _config["GoogleSheets:CredentialsPath"] ?? "credentials.json";
             var spreadsheetId = _config["GoogleSheets:SpreadsheetId"];
             const string sheetName = "Sheet1";
 
             if (string.IsNullOrWhiteSpace(spreadsheetId))
                 return (false, "SpreadsheetId not configured.");
-            if (!File.Exists(credPath))
-                return (false, $"credentials.json not found at '{credPath}'.");
 
             try
             {
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
@@ -588,7 +545,6 @@ namespace RizvizERP.API.Services
             string intervieweeName, string companyName, string interviewType,
             string feedbackText, string recommendation)
         {
-            var credPath = _config["GoogleSheets:CredentialsPath"] ?? "credentials.json";
             var spreadsheetId = _config["GoogleSheets:SpreadsheetId"];
             var sheetName = _config["GoogleSheets:SheetName"] ?? "Interview Feedback";
 
@@ -596,23 +552,14 @@ namespace RizvizERP.API.Services
                 "[UpdateInterviewFeedback] Looking for row: Candidate='{Candidate}', Company='{Company}', Type='{Type}'",
                 intervieweeName, companyName, interviewType);
 
-            if (string.IsNullOrWhiteSpace(credPath) || string.IsNullOrWhiteSpace(spreadsheetId))
+            if (string.IsNullOrWhiteSpace(spreadsheetId))
             {
-                return (false, "Google Sheets credentials or Spreadsheet ID not configured.");
-            }
-
-            if (!File.Exists(credPath))
-            {
-                return (false, $"credentials.json not found at '{credPath}'.");
+                return (false, "Google Sheets Spreadsheet ID not configured.");
             }
 
             try
             {
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                {
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                }
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
@@ -690,11 +637,11 @@ namespace RizvizERP.API.Services
                         matchedExcel?.JobCloseDate?.ToString("dd-MMM-yyyy") ?? "", // K
                         matchedExcel?.FirstSalary ?? "", // L
                         matchedExcel?.JhSuggest ?? "", // M
-                        matchedExcel?.InterviewCharges != 0 ? matchedExcel.InterviewCharges.ToString("F2") : "", // N
-                        matchedExcel?.JhDue != 0 ? matchedExcel.JhDue.ToString("F2") : "", // O
-                        matchedExcel?.FirstPaymentOnJob != 0 ? matchedExcel.FirstPaymentOnJob.ToString("F2") : "", // P
-                        matchedExcel?.SecondPaymentOnJob != 0 ? matchedExcel.SecondPaymentOnJob.ToString("F2") : "", // Q
-                        matchedExcel?.BalancePayable != 0 ? matchedExcel.BalancePayable.ToString("F2") : "", // R
+                        (matchedExcel != null && matchedExcel.InterviewCharges != 0) ? matchedExcel.InterviewCharges.ToString("F2") : "", // N
+                        (matchedExcel != null && matchedExcel.JhDue != 0) ? matchedExcel.JhDue.ToString("F2") : "", // O
+                        (matchedExcel != null && matchedExcel.FirstPaymentOnJob != 0) ? matchedExcel.FirstPaymentOnJob.ToString("F2") : "", // P
+                        (matchedExcel != null && matchedExcel.SecondPaymentOnJob != 0) ? matchedExcel.SecondPaymentOnJob.ToString("F2") : "", // Q
+                        (matchedExcel != null && matchedExcel.BalancePayable != 0) ? matchedExcel.BalancePayable.ToString("F2") : "", // R
                         feedbackText ?? "", // S
                         recommendation ?? "", // T
                         now.ToString("yyyy-MM-dd"), // U
@@ -723,19 +670,9 @@ namespace RizvizERP.API.Services
         public async Task<(bool Success, int DeletedCount, string Error)> DeleteRowsWithoutFeedbackAsync(
             string spreadsheetId, string sheetName)
         {
-            var credPath = _config["GoogleSheets:CredentialsPath"];
-            if (string.IsNullOrWhiteSpace(credPath)) credPath = "credentials.json";
-
-            if (!File.Exists(credPath))
-                return (false, 0, $"credentials.json not found at '{credPath}'.");
-
             try
             {
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                {
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                }
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
@@ -895,23 +832,15 @@ namespace RizvizERP.API.Services
 
         public async Task<(bool Success, string Error)> BackfillMissingSheetDataAsync()
         {
-            var credPath = _config["GoogleSheets:CredentialsPath"] ?? "credentials.json";
             var spreadsheetId = _config["GoogleSheets:SpreadsheetId"];
             var sheetName = _config["GoogleSheets:SheetName"] ?? "Interview Feedback";
 
             if (string.IsNullOrWhiteSpace(spreadsheetId))
                 return (false, "Google Sheets SpreadsheetId not configured.");
 
-            if (!File.Exists(credPath))
-                return (false, $"credentials.json not found at '{credPath}'.");
-
             try
             {
-                GoogleCredential credential;
-                await using (var stream = new FileStream(credPath, FileMode.Open, FileAccess.Read))
-                {
-                    credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
-                }
+                var credential = await GetCredentialAsync();
 
                 var service = new SheetsService(new BaseClientService.Initializer
                 {
