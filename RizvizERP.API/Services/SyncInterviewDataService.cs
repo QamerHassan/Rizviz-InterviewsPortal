@@ -26,6 +26,9 @@ namespace RizvizERP.API.Services
         // Tracks the last Excel file write-time across auto-sync calls (static = shared across scopes)
         private static DateTime? _lastKnownModifiedTime = null;
 
+        // Caches the details of the most recent synchronization
+        private static InterviewSyncResultDto _lastSyncResult = null;
+
         public SyncInterviewDataService(
             ApplicationDbContext context,
             IOptions<InterviewSyncSettings> settings,
@@ -352,7 +355,17 @@ namespace RizvizERP.API.Services
                 });
             }
 
+            _lastSyncResult = result;
             return result;
+        }
+
+        public InterviewSyncResultDto GetLastSyncResult()
+        {
+            return _lastSyncResult ?? new InterviewSyncResultDto
+            {
+                Message = "No synchronization has occurred since server startup.",
+                SyncedAt = DateTime.UtcNow
+            };
         }
 
         public InterviewSyncStatusDto GetSyncStatus()

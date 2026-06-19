@@ -434,6 +434,9 @@ export const apiSlice = createApi({
     getInterviewSyncStatus: builder.query({
       query: () => '/interviews/sync-status',
     }),
+    getLastSyncResult: builder.query({
+      query: () => '/interviews/last-sync-result',
+    }),
     getInterviewHistory: builder.query({
       query: (id) => `/interviews/${id}/history`,
     }),
@@ -574,6 +577,8 @@ export const {
   useGetCandidateDetailQuery,
   useRefreshInterviewsFromExcelMutation,
   useGetInterviewSyncStatusQuery,
+  useGetLastSyncResultQuery,
+  useLazyGetLastSyncResultQuery,
   useGetInterviewHistoryQuery,
   useGetHrStatsQuery,
   useGetPayrollStatsQuery,

@@ -24,6 +24,7 @@ import {
   useSyncUploadInterviewsMutation,
   useRefreshInterviewsFromExcelMutation,
   useGetInterviewSyncStatusQuery,
+  useLazyGetLastSyncResultQuery,
   useGetInterviewHistoryQuery,
 } from '../store/apiSlice';
 import { useSelector } from 'react-redux';
@@ -202,6 +203,7 @@ const Interviews = () => {
   });
   const { data: candidateNames = [] } = useGetInterviewCandidateNamesQuery();
   const { data: companyNames = [] } = useGetInterviewCompanyNamesQuery();
+  const [triggerGetLastSyncResult] = useLazyGetLastSyncResultQuery();
 
   const isRefreshing = isPagedFetching || isStatsFetching || statusBreakdownLoading || isSyncStatusFetching;
 
@@ -217,9 +219,8 @@ const Interviews = () => {
       refetchStatusBreakdown();
       refetchSyncStatus();
 
-      // Also fetch the sync result so we can show the summary popup
-      // (same as clicking "Refresh" manually — gives the user a diff view)
-      refreshFromExcel().unwrap()
+      // Fetch the last sync result details from database/memory cache to show popup
+      triggerGetLastSyncResult().unwrap()
         .then((result) => {
           const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
                           (result.insertedRows ?? result.InsertedRows ?? 0);

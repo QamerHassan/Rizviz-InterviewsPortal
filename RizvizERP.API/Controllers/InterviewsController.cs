@@ -425,6 +425,42 @@ namespace RizvizERP.API.Controllers
             }
         }
 
+        [HttpGet("last-sync-result")]
+        public IActionResult GetLastSyncResult()
+        {
+            try
+            {
+                var result = _syncService.GetLastSyncResult();
+                return Ok(new
+                {
+                    totalRows = result.TotalRows,
+                    insertedRows = result.InsertedRows,
+                    updatedRows = result.UpdatedRows,
+                    unchangedRows = result.UnchangedRows,
+                    failedRows = result.FailedRows,
+                    syncedAt = result.SyncedAt,
+                    message = result.Message,
+                    errors = result.Errors,
+                    changes = result.Changes.Select(c => new
+                    {
+                        c.Sr,
+                        c.IntervieweeName,
+                        c.CompanyName,
+                        c.ChangeType,
+                        c.Summary,
+                        c.FieldChanges,
+                        c.OldRow,
+                        c.NewRow,
+                        c.RowFields
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
         [HttpGet("column-headers")]
         public IActionResult GetColumnHeaders()
         {
