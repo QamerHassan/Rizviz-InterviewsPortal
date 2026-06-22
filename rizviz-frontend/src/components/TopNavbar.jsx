@@ -165,6 +165,66 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
       });
     });
 
+    connection.on('ReceiveSyncComplete', (syncData) => {
+      console.log('[SignalR] 🔄 ReceiveSyncComplete fired! Data:', syncData);
+      
+      const inserted = syncData.insertedRows ?? syncData.InsertedRows ?? 0;
+      const updated = syncData.updatedRows ?? syncData.UpdatedRows ?? 0;
+      const deleted = syncData.deletedRows ?? syncData.DeletedRows ?? 0;
+      const failed = syncData.failedRows ?? syncData.FailedRows ?? 0;
+      const messageText = syncData.message ?? syncData.Message ?? '';
+
+      // Play modern synthetic chime
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+      } catch (e) {
+        console.warn('[SignalR] Audio chime blocked:', e.message);
+      }
+
+      // Invalidate tags so all database views automatically refresh!
+      dispatch(apiSlice.util.invalidateTags(['Interviews']));
+
+      const changed = inserted + updated + deleted;
+      if (changed > 0) {
+        notificationApiRef.current.success({
+          message: 'Excel Synced Automatically',
+          description: `Database updated: ${inserted} new, ${deleted} deleted, ${updated} modified.`,
+          placement: 'topRight',
+          duration: 7
+        });
+
+        // Add a read/unread notification to the notifications list
+        setNotifications(prev => [
+          {
+            id: Math.random().toString(),
+            message: `Excel Sync: ${inserted} new, ${deleted} deleted, ${updated} modified.`,
+            timestamp: new Date().toISOString(),
+            type: 'SyncComplete',
+            isRead: false,
+            sr: null,
+            intervieweeName: null,
+            jobHunterName: null,
+            companyName: 'System Sync',
+            changedField: 'Excel Sync',
+            oldValue: '',
+            newValue: `new: ${inserted}, del: ${deleted}, mod: ${updated}`
+          },
+          ...prev
+        ]);
+      }
+    });
+
     connection.start()
       .then(() => {
         console.log(`[SignalR] ✅ Connected! State: ${connection.state} | ConnectionId: ${connection.connectionId}`);

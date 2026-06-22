@@ -306,43 +306,15 @@ const Interviews = () => {
   );
 
   const handleRefreshFromExcel = async () => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    if (!isLocalhost) {
-      // Production mode: Just fetch the last sync result details from database/memory cache
-      const hide = message.loading('Fetching last sync result...', 0);
-      try {
-        const result = await triggerGetLastSyncResult().unwrap();
-        hide();
-        setSyncSummary(result);
-        const bySr = {};
-        (result.changes || []).forEach((c) => {
-          const sr = c.sr ?? c.Sr;
-          if (sr != null) bySr[sr] = c;
-        });
-        setLastChangeBySr(bySr);
-        setSyncModalOpen(true);
-        const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
-                        (result.insertedRows ?? result.InsertedRows ?? 0);
-        if (changed > 0) {
-          message.success(`Loaded last sync summary (${changed} changes).`);
-        } else {
-          message.info(result.message || 'No changes were recorded in the last sync.');
-        }
-      } catch (err) {
-        hide();
-        message.error('Failed to retrieve last sync result.');
-      }
-      return;
-    }
-
-    // Localhost mode: Perform actual local server-side file sync
+    // Perform actual server-side file sync (works on both localhost and production using the persistently saved Excel file)
     const hide = message.loading('Syncing data from Excel...', 0);
     try {
       const result = await refreshFromExcel().unwrap();
       hide();
+      const deletedCount = (result.changes || []).filter(c => String(c.changeType || c.ChangeType || '').toLowerCase() === 'deleted').length;
       const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
-                      (result.insertedRows ?? result.InsertedRows ?? 0);
+                      (result.insertedRows ?? result.InsertedRows ?? 0) +
+                      deletedCount;
 
       if (changed > 0) {
         setSyncSummary(result);
@@ -383,8 +355,10 @@ const Interviews = () => {
     try {
       const result = await syncUploadInterviews(formData).unwrap();
       hide();
+      const deletedCount = (result.changes || []).filter(c => String(c.changeType || c.ChangeType || '').toLowerCase() === 'deleted').length;
       const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
-                      (result.insertedRows ?? result.InsertedRows ?? 0);
+                      (result.insertedRows ?? result.InsertedRows ?? 0) +
+                      deletedCount;
 
       if (changed > 0) {
         setSyncSummary(result);

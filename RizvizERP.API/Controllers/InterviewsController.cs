@@ -379,19 +379,15 @@ namespace RizvizERP.API.Controllers
             if (IsLiveUatReadOnly)
                 return BadRequest(new { message = "Live UAT interviews cannot be modified. Data is loaded from mkt.interview_master / interview_detail." });
 
-            string tempPath = null;
             try
             {
-                var originalExt = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
-                if (string.IsNullOrEmpty(originalExt)) originalExt = ".xlsx";
-
-                tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + originalExt);
-                using (var stream = new FileStream(tempPath, FileMode.Create))
+                var persistentPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_interviews.xlsx");
+                using (var stream = new FileStream(persistentPath, FileMode.Create))
                 {
                     file.CopyTo(stream);
                 }
 
-                var result = _syncService.SyncFromExcel("ManualUploadSync", replaceAll: false, uploadFilePath: tempPath);
+                var result = _syncService.SyncFromExcel("ManualUploadSync", replaceAll: false, uploadFilePath: persistentPath);
                 
                 return Ok(new
                 {
@@ -420,13 +416,6 @@ namespace RizvizERP.API.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = ex.Message });
-            }
-            finally
-            {
-                if (tempPath != null && System.IO.File.Exists(tempPath))
-                {
-                    try { System.IO.File.Delete(tempPath); } catch {}
-                }
             }
         }
 

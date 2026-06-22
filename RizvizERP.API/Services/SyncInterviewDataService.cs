@@ -274,79 +274,100 @@ namespace RizvizERP.API.Services
                 if (insertedCodes.Count > 0)
                     _context.SaveChanges();
 
+                bool isFirstSync = !_lastKnownModifiedTime.HasValue;
+                bool isAutoSyncFirstRun = string.Equals(changedBy, "AutoSync", StringComparison.OrdinalIgnoreCase) && isFirstSync;
+
                 var mode = doReplaceAll ? "replaced all rows from file" : "merged with Excel";
                 var deletedCount = deletedRows.Count;
                 result.Message = $"Sync complete ({mode}): {result.InsertedRows} new, {result.UpdatedRows} changed, {result.UnchangedRows} unchanged, {deletedCount} deleted, {result.FailedRows} failed.";
                 LogSync(result, null);
 
+                // Broadcast global sync completion only if NOT first startup autosync
+                if (!isAutoSyncFirstRun)
+                {
+                    _notificationService.BroadcastSyncComplete(result.InsertedRows, result.UpdatedRows, deletedCount, result.FailedRows, result.Message);
+                }
+
                 // Update timestamp so next AutoSync poll skips if file hasn't changed again
                 _lastKnownModifiedTime = currentModifiedTime;
 
                 // Broadcast SignalR notifications for all synced changes to affected users
-                foreach (var item in notificationsToSend)
+                // ONLY if this is not the first startup sync AND the total number of notifications is <= 5 (to avoid flooding/spamming notifications)
+                if (!isAutoSyncFirstRun)
                 {
-                    try
+                    int totalNotificationCount = notificationsToSend.Count + deletedRows.Count;
+                    if (totalNotificationCount <= 5)
                     {
-                        var row = item.Row;
-                        var changeType = item.ChangeType;
-                        
-                        string dateStr = row.InterviewDate?.ToString("dd MMM yyyy") 
-                                         ?? row.JobStartDate?.ToString("dd MMM yyyy") 
-                                         ?? DateTime.UtcNow.ToString("dd MMM yyyy");
-                                         
-                        string messageText = changeType == "NewRow"
-                            ? $"Your interview with {row.CompanyName} has been scheduled on {dateStr}."
-                            : $"Your interview with {row.CompanyName} has been updated ({changeType}) on {dateStr}.";
-
-                        var notification = new NotificationModel
+                        foreach (var item in notificationsToSend)
                         {
-                            Id = Guid.NewGuid().ToString(),
-                            Message = messageText,
-                            Timestamp = DateTime.UtcNow,
-                            Type = changeType,
-                            TargetInterviewName = row.IntervieweeName,
-                            Sr = row.Sr,
-                            IntervieweeName = row.IntervieweeName,
-                            JobHunterName = row.JobHunterName,
-                            CompanyName = row.CompanyName,
-                            ChangedField = changeType == "NewRow" ? "New Row" : changeType,
-                            OldValue = "",
-                            NewValue = row.Status
-                        };
+                            try
+                            {
+                                var row = item.Row;
+                                var changeType = item.ChangeType;
+                                
+                                string dateStr = row.InterviewDate?.ToString("dd MMM yyyy") 
+                                                 ?? row.JobStartDate?.ToString("dd MMM yyyy") 
+                                                 ?? DateTime.UtcNow.ToString("dd MMM yyyy");
+                                                 
+                                string messageText = changeType == "NewRow"
+                                    ? $"Your interview with {row.CompanyName} has been scheduled on {dateStr}."
+                                    : $"Your interview with {row.CompanyName} has been updated ({changeType}) on {dateStr}.";
 
-                        _notificationService.SendToEligibleConnections(notification, row).GetAwaiter().GetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to send SignalR notification during excel sync");
-                    }
-                }
+                                var notification = new NotificationModel
+                                {
+                                    Id = Guid.NewGuid().ToString(),
+                                    Message = messageText,
+                                    Timestamp = DateTime.UtcNow,
+                                    Type = changeType,
+                                    TargetInterviewName = row.IntervieweeName,
+                                    Sr = row.Sr,
+                                    IntervieweeName = row.IntervieweeName,
+                                    JobHunterName = row.JobHunterName,
+                                    CompanyName = row.CompanyName,
+                                    ChangedField = changeType == "NewRow" ? "New Row" : changeType,
+                                    OldValue = "",
+                                    NewValue = row.Status
+                                };
 
-                // Notify affected users + Admins for deleted rows.
-                foreach (var row in deletedRows)
-                {
-                    try
-                    {
-                        var notification = new NotificationModel
+                                _notificationService.SendToEligibleConnections(notification, row).GetAwaiter().GetResult();
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to send SignalR notification during excel sync");
+                            }
+                        }
+
+                        // Notify affected users + Admins for deleted rows.
+                        foreach (var row in deletedRows)
                         {
-                            Id = Guid.NewGuid().ToString(),
-                            Message = $"Your interview with {row.CompanyName} (SR: {row.Sr}) has been removed.",
-                            Timestamp = DateTime.UtcNow,
-                            Type = "Deleted",
-                            TargetInterviewName = row.IntervieweeName,
-                            Sr = row.Sr,
-                            IntervieweeName = row.IntervieweeName,
-                            JobHunterName = row.JobHunterName,
-                            CompanyName = row.CompanyName,
-                            ChangedField = "Row Deleted",
-                            OldValue = row.Status,
-                            NewValue = "Deleted"
-                        };
-                        _notificationService.SendToEligibleConnections(notification, row).GetAwaiter().GetResult();
+                            try
+                            {
+                                var notification = new NotificationModel
+                                {
+                                    Id = Guid.NewGuid().ToString(),
+                                    Message = $"Your interview with {row.CompanyName} (SR: {row.Sr}) has been removed.",
+                                    Timestamp = DateTime.UtcNow,
+                                    Type = "Deleted",
+                                    TargetInterviewName = row.IntervieweeName,
+                                    Sr = row.Sr,
+                                    IntervieweeName = row.IntervieweeName,
+                                    JobHunterName = row.JobHunterName,
+                                    CompanyName = row.CompanyName,
+                                    ChangedField = "Row Deleted",
+                                    OldValue = row.Status,
+                                    NewValue = "Deleted"
+                                };
+                                _notificationService.SendToEligibleConnections(notification, row).GetAwaiter().GetResult();
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to send delete notification during excel sync");
+                            }
+                        }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogWarning(ex, "Failed to send delete notification during excel sync");
+                        _logger.LogInformation("[SyncFromExcel] Skipped sending {Count} individual row-level notifications to prevent spam (threshold is 5).", totalNotificationCount);
                     }
                 }
             }
@@ -499,6 +520,18 @@ namespace RizvizERP.API.Services
 
         private string ResolveSourcePath()
         {
+            var isDevelopment = string.Equals(
+                Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), 
+                "Development", 
+                StringComparison.OrdinalIgnoreCase);
+
+            if (!isDevelopment)
+            {
+                var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_interviews.xlsx");
+                if (File.Exists(lastUploadedPath))
+                    return lastUploadedPath;
+            }
+
             var repoRoot = GetRepoRoot();
 
             if (!string.IsNullOrWhiteSpace(_settings.PreferredLocalFile))

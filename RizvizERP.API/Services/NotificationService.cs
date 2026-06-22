@@ -218,5 +218,28 @@ namespace RizvizERP.API.Services
 
             Console.WriteLine($"[NotificationService] ── SendToEligibleConnections DONE ──");
         }
+
+        public void BroadcastSyncComplete(int inserted, int updated, int deleted, int failed, string message)
+        {
+            try
+            {
+                Task.Run(async () =>
+                {
+                    await _hubContext.Clients.All.SendAsync("ReceiveSyncComplete", new
+                    {
+                        insertedRows = inserted,
+                        updatedRows = updated,
+                        deletedRows = deleted,
+                        failedRows = failed,
+                        message = message
+                    });
+                    Console.WriteLine($"[NotificationService] 📤 Broadcasted ReceiveSyncComplete to all clients");
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NotificationService] Error broadcasting sync complete: {ex.Message}");
+            }
+        }
     }
 }
