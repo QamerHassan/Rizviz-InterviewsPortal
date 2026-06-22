@@ -155,9 +155,8 @@ namespace RizvizERP.API.Controllers
             if (!string.IsNullOrEmpty(candidate) && candidate != "All")
                 query = query.Where(i => i.IntervieweeName == candidate);
 
-            // TODO: Uncomment when 'stack' column is added to Rizviz_Interviews table
-            // if (!string.IsNullOrEmpty(stack) && stack != "All")
-            //     query = query.Where(i => i.Stack == stack);
+            if (!string.IsNullOrEmpty(stack) && stack != "All")
+                query = query.Where(i => i.Stack == stack);
 
             if (!string.IsNullOrEmpty(date_from) && DateTime.TryParse(date_from, out var df))
             {
@@ -303,6 +302,25 @@ namespace RizvizERP.API.Controllers
                 var names = InterviewQuery
                     .Where(i => i.CompanyName != null && i.CompanyName != "")
                     .Select(i => i.CompanyName.Trim())
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToList();
+                return Ok(names);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("stack-names")]
+        public IActionResult GetStackNames()
+        {
+            try
+            {
+                var names = InterviewQuery
+                    .Where(i => i.Stack != null && i.Stack != "")
+                    .Select(i => i.Stack.Trim())
                     .Distinct()
                     .OrderBy(n => n)
                     .ToList();

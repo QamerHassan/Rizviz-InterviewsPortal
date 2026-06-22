@@ -1,11 +1,11 @@
 import React from 'react';
 import { Tag } from 'antd';
-import { STATUS_PILL_COLORS } from '../../utils/interviewStatusUtils';
+import { STATUS_PILL_COLORS, getStatusColor } from '../../utils/interviewStatusUtils';
 
-const InterviewStatusBadge = ({ status }) => {
+const InterviewStatusBadge = ({ status, record }) => {
   const label = status || 'Scheduled';
-  const key = String(label).trim().toLowerCase();
-  const style = STATUS_PILL_COLORS[key] || STATUS_PILL_COLORS.default;
+  const colorKey = getStatusColor(record || label);
+  const style = STATUS_PILL_COLORS[colorKey] || STATUS_PILL_COLORS.default;
   
   return (
     <Tag 

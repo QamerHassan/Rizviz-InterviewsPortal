@@ -17,6 +17,7 @@ import {
   useGetInterviewStatusBreakdownQuery,
   useGetInterviewCandidateNamesQuery,
   useGetInterviewCompanyNamesQuery,
+  useGetInterviewStackNamesQuery,
   useCreateInterviewMutation,
   useUpdateInterviewMutation,
   useDeleteInterviewMutation,
@@ -43,6 +44,8 @@ import dayjs from 'dayjs';
 
 const { Title, Paragraph, Text } = Typography;
 const { Option } = Select;
+
+const DEFAULT_STACKS = ['Snow', 'AI/Ml', 'DevOps', 'Data Sc.'];
 
 const formatDate = (d) => {
   if (d == null || d === '' || String(d).toLowerCase() === '(blank)') return '—';
@@ -108,14 +111,16 @@ const Interviews = () => {
      date_from: dateFrom,
      date_to: dateTo,
      metric: statFilter === 'all' ? '' : statFilter,
-   }), [search, companyFilter, candidateFilter, dateFrom, dateTo, statFilter]);
+     stack: stackFilter === 'All' ? '' : stackFilter,
+   }), [search, companyFilter, candidateFilter, dateFrom, dateTo, statFilter, stackFilter]);
 
   /** Status cards: full dataset for user (no date window) so every status appears */
   const statusOverviewFilters = useMemo(() => ({
     search,
     company: companyFilter === 'All' ? '' : companyFilter,
     candidate: candidateFilter === 'All' ? '' : candidateFilter,
-  }), [search, companyFilter, candidateFilter]);
+    stack: stackFilter === 'All' ? '' : stackFilter,
+  }), [search, companyFilter, candidateFilter, stackFilter]);
 
   const statusesParam = selectedStatuses.length > 0
     ? selectedStatuses.join(',')
@@ -203,7 +208,24 @@ const Interviews = () => {
   });
   const { data: candidateNames = [] } = useGetInterviewCandidateNamesQuery();
   const { data: companyNames = [] } = useGetInterviewCompanyNamesQuery();
+  const { data: stackNames = [] } = useGetInterviewStackNamesQuery();
   const [triggerGetLastSyncResult] = useLazyGetLastSyncResultQuery();
+
+  const allStacks = useMemo(() => {
+    const combined = [...DEFAULT_STACKS, ...stackNames];
+    const seen = new Set();
+    const result = [];
+    for (const item of combined) {
+      if (item && typeof item === 'string') {
+        const lower = item.trim().toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          result.push(item.trim());
+        }
+      }
+    }
+    return result.sort((a, b) => a.localeCompare(b));
+  }, [stackNames]);
 
   const isRefreshing = isPagedFetching || isStatsFetching || statusBreakdownLoading || isSyncStatusFetching;
 
@@ -315,48 +337,31 @@ const Interviews = () => {
     }
 
     // Localhost mode: Perform actual local server-side file sync
-    // Step 1: Fetch the latest sync status to get the server-side file fingerprint
-    const statusResult = await refetchSyncStatus();
-    const latestStatus = statusResult?.data ?? syncStatus;
-    const serverModified = latestStatus?.sourceFileLastModified ?? latestStatus?.SourceFileLastModified;
-
-    // Step 2: Compare with stored fingerprint in localStorage
-    const storedFingerprint = localStorage.getItem(FINGERPRINT_KEY);
-    const currentFingerprint = serverModified ? String(serverModified) : null;
-
-    if (currentFingerprint && storedFingerprint === currentFingerprint) {
-      // Fingerprints match — file has not changed, skip the upload entirely
-      setNoChangesModalOpen(true);
-      return;
-    }
-
-    // Step 3: Fingerprint is new or different — proceed with actual sync
+    const hide = message.loading('Syncing data from Excel...', 0);
     try {
       const result = await refreshFromExcel().unwrap();
-      setSyncSummary(result);
-      const bySr = {};
-      (result.changes || []).forEach((c) => {
-        const sr = c.sr ?? c.Sr;
-        if (sr != null) bySr[sr] = c;
-      });
-      setLastChangeBySr(bySr);
-      setSyncModalOpen(true);
-      const changed = result.updatedRows ?? result.UpdatedRows ?? 0;
-      message.success(
-        changed > 0
-          ? `${changed} row(s) updated from Excel. See sync summary for details.`
-          : (result.message || 'Interview data synced from Excel.')
-      );
+      hide();
+      const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
+                      (result.insertedRows ?? result.InsertedRows ?? 0);
+
+      if (changed > 0) {
+        setSyncSummary(result);
+        const bySr = {};
+        (result.changes || []).forEach((c) => {
+          const sr = c.sr ?? c.Sr;
+          if (sr != null) bySr[sr] = c;
+        });
+        setLastChangeBySr(bySr);
+        setSyncModalOpen(true);
+        message.success(`${changed} row(s) updated from Excel. See sync summary for details.`);
+      } else {
+        setNoChangesModalOpen(true);
+      }
       refetchStats();
       refetchPaged();
       refetchStatusBreakdown();
-      // After successful sync, store the new fingerprint
-      const newStatus = await refetchSyncStatus();
-      const newModified = newStatus?.data?.sourceFileLastModified ?? newStatus?.data?.SourceFileLastModified;
-      if (newModified) {
-        localStorage.setItem(FINGERPRINT_KEY, String(newModified));
-      }
     } catch (err) {
+      hide();
       message.error(err?.data?.message || 'Excel sync failed. Check network path and API logs.');
     }
   };
@@ -378,21 +383,22 @@ const Interviews = () => {
     try {
       const result = await syncUploadInterviews(formData).unwrap();
       hide();
-      setSyncSummary(result);
-      const bySr = {};
-      (result.changes || []).forEach((c) => {
-        const sr = c.sr ?? c.Sr;
-        if (sr != null) bySr[sr] = c;
-      });
-      setLastChangeBySr(bySr);
-      setSyncModalOpen(true);
       const changed = (result.updatedRows ?? result.UpdatedRows ?? 0) +
                       (result.insertedRows ?? result.InsertedRows ?? 0);
-      message.success(
-        changed > 0
-          ? `${changed} row(s) updated from your file. See sync summary for details.`
-          : (result.message || 'Data synced successfully.')
-      );
+
+      if (changed > 0) {
+        setSyncSummary(result);
+        const bySr = {};
+        (result.changes || []).forEach((c) => {
+          const sr = c.sr ?? c.Sr;
+          if (sr != null) bySr[sr] = c;
+        });
+        setLastChangeBySr(bySr);
+        setSyncModalOpen(true);
+        message.success(`${changed} row(s) updated from your file. See sync summary for details.`);
+      } else {
+        setNoChangesModalOpen(true);
+      }
       refetchStats();
       refetchPaged();
       refetchStatusBreakdown();
@@ -491,7 +497,7 @@ const Interviews = () => {
         key: 'Status',
         width: 110,
         fixed: 'right',
-        render: (_, record) => <InterviewStatusBadge status={getInterviewRowStatus(record)} />,
+        render: (_, record) => <InterviewStatusBadge status={getInterviewRowStatus(record)} record={record} />,
       }]
       : [];
 
@@ -541,10 +547,7 @@ const Interviews = () => {
             placeholder="Filter by Stack"
           >
             <Option value="All">All Stacks</Option>
-            <Option value="AI/ML">AI/ML</Option>
-            <Option value="Snow">Snow</Option>
-            <Option value="Data">Data</Option>
-            <Option value="DevOps">DevOps</Option>
+            {allStacks.map((s) => <Option key={s} value={s}>{s}</Option>)}
           </Select>
 
           <div className="flex flex-wrap items-center gap-2 ml-auto">
@@ -723,7 +726,7 @@ const Interviews = () => {
                         {(lastChangeBySr[r.Sr].changeType ?? lastChangeBySr[r.Sr].ChangeType) || 'Changed'}
                       </Tag>
                     )}
-                    <InterviewStatusBadge status={getInterviewRowStatus(r)} />
+                    <InterviewStatusBadge status={getInterviewRowStatus(r)} record={r} />
                   </Space>
                 }
                 title={<span className="font-bold">{r.CompanyName || 'No company'}</span>}

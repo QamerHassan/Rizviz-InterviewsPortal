@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Text;
 using ClosedXML.Excel;
 using RizvizERP.API.Models;
 using RizvizERP.API.Services;
@@ -17,6 +18,81 @@ namespace RizvizERP.API.Controllers
         private static readonly Regex DateLikeCompanyPattern = new Regex(
             @"^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\(blank\))$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        public static readonly Dictionary<string, string[]> AliasMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Sr", new[] { "sr.no", "sr no", "sr", "serial no", "srno", "serial" } },
+            { "InvTo", new[] { "invoice to", "inv to", "invto" } },
+            { "InterviewDateTime", new[] { "interviewdatetime", "interview date time", "interview date", "date" } },
+            { "StackName", new[] { "stack name", "stack" } },
+            { "InterviewFor", new[] { "interview for", "job profile", "role" } },
+            { "IntervieweeName", new[] { "interviewee name", "candidate name", "candidate", "interviewee" } },
+            { "JobHunterName", new[] { "job hunter name", "recruiter name", "recruiter", "job hunter" } },
+            { "CompanyName", new[] { "company name", "client name", "company", "client" } },
+            { "InterviewType", new[] { "interview type", "type" } },
+            { "JobStartDate", new[] { "job start date", "start date" } },
+            { "JobCloseDate", new[] { "job closed date", "job close date", "close date" } },
+            { "Status", new[] { "status", "outcome" } },
+            
+            // Extra fields
+            { "FirstSalary", new[] { "first salary", "salary" } },
+            { "JhSuggest", new[] { "jh suggest", "suggest" } },
+            { "InterviewCharges", new[] { "interview charges", "charges" } },
+            { "JhDue", new[] { "jh due" } },
+            { "FirstPaymentOnJob", new[] { "first payment on job", "first payment" } },
+            { "SecondPaymentOnJob", new[] { "second payment on job", "second payment" } },
+            { "BalancePayable", new[] { "balance payable", "balance" } }
+        };
+
+        public static string NormalizeHeaderForMatching(string h)
+        {
+            if (string.IsNullOrWhiteSpace(h)) return "";
+            var normalized = h.Trim().ToLowerInvariant();
+            
+            var sb = new StringBuilder();
+            foreach (char c in normalized)
+            {
+                if (char.IsLetterOrDigit(c))
+                    sb.Append(c);
+                else
+                    sb.Append(' ');
+            }
+            
+            return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+        }
+
+        public static string GetCanonicalValue(ParsedInterviewRow row, string fieldName)
+        {
+            if (row?.ByHeader == null || !AliasMap.TryGetValue(fieldName, out var aliases))
+                return null;
+
+            var normalizedAliases = aliases.Select(NormalizeHeaderForMatching).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var kvp in row.ByHeader)
+            {
+                var normalizedHeader = NormalizeHeaderForMatching(kvp.Key);
+                if (normalizedAliases.Contains(normalizedHeader) && !string.IsNullOrWhiteSpace(kvp.Value))
+                {
+                    return kvp.Value.Trim();
+                }
+            }
+
+            return null;
+        }
+
+        public static bool HasRequiredHeaders(List<string> headers, out List<string> missingRequired)
+        {
+            missingRequired = new List<string>();
+            var normalizedHeaders = headers.Select(NormalizeHeaderForMatching).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            
+            var intervieweeAliases = AliasMap["IntervieweeName"].Select(NormalizeHeaderForMatching);
+            if (!intervieweeAliases.Any(a => normalizedHeaders.Contains(a)))
+            {
+                missingRequired.Add("IntervieweeName (Candidate Name)");
+            }
+            
+            return missingRequired.Count == 0;
+        }
 
         public static bool LooksLikeDateOrPlaceholder(string value)
         {
@@ -32,11 +108,32 @@ namespace RizvizERP.API.Controllers
         public static string NormalizePersonName(string name) =>
             string.IsNullOrWhiteSpace(name) ? null : name.Trim();
 
-        public static bool IsInterviewHeaderRow(string headerLine) =>
-            !string.IsNullOrWhiteSpace(headerLine) &&
-            headerLine.IndexOf("INTERVIEWEE", StringComparison.OrdinalIgnoreCase) >= 0 &&
-            (headerLine.IndexOf("COMPANY", StringComparison.OrdinalIgnoreCase) >= 0 ||
-             headerLine.IndexOf("JOB HUNTER", StringComparison.OrdinalIgnoreCase) >= 0);
+        public static bool IsInterviewHeaderRow(string headerLine)
+        {
+            if (string.IsNullOrWhiteSpace(headerLine)) return false;
+            var cells = headerLine.Split(new[] { ' ', ',', '\t', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            return IsInterviewHeaderRow(cells);
+        }
+
+        public static bool IsInterviewHeaderRow(IEnumerable<string> cells)
+        {
+            if (cells == null) return false;
+            int matchCount = 0;
+            foreach (var cell in cells)
+            {
+                if (string.IsNullOrWhiteSpace(cell)) continue;
+                var norm = NormalizeHeaderForMatching(cell);
+                var isMatch = AliasMap["IntervieweeName"].Any(a => NormalizeHeaderForMatching(a) == norm) ||
+                              AliasMap["CompanyName"].Any(a => NormalizeHeaderForMatching(a) == norm) ||
+                              AliasMap["JobHunterName"].Any(a => NormalizeHeaderForMatching(a) == norm) ||
+                              AliasMap["InterviewFor"].Any(a => NormalizeHeaderForMatching(a) == norm);
+                if (isMatch)
+                {
+                    matchCount++;
+                }
+            }
+            return matchCount >= 2;
+        }
 
         public static bool IsExcelShortFormatHeader(string headerLine) => IsInterviewHeaderRow(headerLine);
 
@@ -64,7 +161,7 @@ namespace RizvizERP.API.Controllers
                 if (string.IsNullOrWhiteSpace(lines[i])) continue;
                 var cols = ParseCsvLine(lines[i]);
 
-                if (headers == null && IsInterviewHeaderRow(string.Join(" ", cols)))
+                if (headers == null && IsInterviewHeaderRow(cols))
                 {
                     headers = cols.Select(NormalizeHeader).Where(h => !string.IsNullOrEmpty(h)).ToList();
                     continue;
@@ -100,11 +197,10 @@ namespace RizvizERP.API.Controllers
             for (int i = 0; i < rows.Count; i++)
             {
                 var cells = ReadRowCells(rows[i], MaxColumns);
-                var headerLine = string.Join(" ", cells);
-                if (IsInterviewHeaderRow(headerLine))
+                if (IsInterviewHeaderRow(cells))
                 {
                     headerIndex = i;
-                    headers = cells.Select(NormalizeHeader).Where(h => !string.IsNullOrEmpty(h)).ToList();
+                    headers = cells.Select(NormalizeHeader).ToList();
                     columnCount = Math.Max(headers.Count, cells.FindLastIndex(x => !string.IsNullOrWhiteSpace(x)) + 1);
                     columnCount = Math.Min(columnCount, MaxColumns);
                     break;
@@ -153,7 +249,7 @@ namespace RizvizERP.API.Controllers
                 dict[header] = value;
             }
 
-            return new ParsedInterviewRow { Headers = headers, ByHeader = dict };
+            return new ParsedInterviewRow { Headers = headers.Where(h => !string.IsNullOrWhiteSpace(h)).ToList(), ByHeader = dict };
         }
 
         private static string NormalizeHeader(string h)
@@ -164,18 +260,10 @@ namespace RizvizERP.API.Controllers
 
         private static bool IsValidParsedRow(ParsedInterviewRow row)
         {
-            var interviewee = GetCell(row, "INTERVIEWEE NAME :", "INTERVIEWEE NAME", "Interviewee Name", "Interviewee");
+            var interviewee = GetCanonicalValue(row, "IntervieweeName");
             if (string.IsNullOrWhiteSpace(interviewee)) return false;
-            if (interviewee.IndexOf("INTERVIEWEE", StringComparison.OrdinalIgnoreCase) >= 0) return false;
-            return true;
-        }
-
-        private static bool IsValidDataRow(string[] cols)
-        {
-            if (cols == null || cols.Length < 5) return false;
-            var interviewee = GetCol(cols, 4);
-            if (string.IsNullOrWhiteSpace(interviewee)) return false;
-            if (interviewee.IndexOf("INTERVIEWEE", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (interviewee.IndexOf("INTERVIEWEE", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                interviewee.IndexOf("CANDIDATE", StringComparison.OrdinalIgnoreCase) >= 0) return false;
             return true;
         }
 
@@ -185,32 +273,32 @@ namespace RizvizERP.API.Controllers
             if (parsed?.ByHeader == null || parsed.ByHeader.Count == 0)
                 return MapRowToInterview(Array.Empty<string>());
 
-            var interviewType = GetCell(parsed, "Interview Type", "Type");
-            var statusRaw = GetCell(parsed, "STATUS", "Status", "Interview Status") ?? interviewType;
-            var jobStart = ParseExcelDate(GetCell(parsed, "Job Start Date", "Job Start"));
-            var jobClose = ParseExcelDate(GetCell(parsed, "Job Close Date", "Job Close"));
-            var interviewDate = ParseExcelDate(GetCell(parsed, "DATE", "DATE:", "Interview Date", "Date")) ?? jobStart;
+            var interviewType = GetCanonicalValue(parsed, "InterviewType");
+            var statusRaw = GetCanonicalValue(parsed, "Status") ?? interviewType;
+            var jobStart = ParseExcelDate(GetCanonicalValue(parsed, "JobStartDate"));
+            var jobClose = ParseExcelDate(GetCanonicalValue(parsed, "JobCloseDate"));
+            var interviewDate = ParseExcelDate(GetCanonicalValue(parsed, "InterviewDateTime")) ?? jobStart;
 
             var interview = new Interview
             {
-                InvTo = GetCell(parsed, "Inv. To", "Inv To", "InvTo"),
-                Sr = int.TryParse(GetCell(parsed, "Sr.", "Sr", "Serial"), out int sr) ? sr : null,
-                JobHunterName = GetCell(parsed, "Job Hunter Name:", "Job Hunter Name", "Job Hunter"),
-                InterviewFor = GetCell(parsed, "INTERVIEW FOR :", "INTERVIEW FOR", "Interview For"),
-                IntervieweeName = NormalizePersonName(GetCell(parsed, "INTERVIEWEE NAME :", "INTERVIEWEE NAME", "Interviewee Name")),
-                CompanyName = GetCell(parsed, "COMPANY NAME :", "COMPANY NAME", "Company Name"),
+                InvTo = GetCanonicalValue(parsed, "InvTo"),
+                Sr = int.TryParse(GetCanonicalValue(parsed, "Sr"), out int sr) ? sr : null,
+                JobHunterName = GetCanonicalValue(parsed, "JobHunterName"),
+                InterviewFor = GetCanonicalValue(parsed, "InterviewFor"),
+                IntervieweeName = NormalizePersonName(GetCanonicalValue(parsed, "IntervieweeName")),
+                CompanyName = GetCanonicalValue(parsed, "CompanyName"),
                 InterviewType = string.IsNullOrWhiteSpace(interviewType) ? "Technical" : interviewType,
                 Status = InterviewCodeHelper.NormalizeStatus(statusRaw, interviewType),
                 InterviewDate = interviewDate,
                 JobStartDate = jobStart,
                 JobCloseDate = jobClose,
-                FirstSalary = GetCell(parsed, "First Salary", "Salary"),
-                JhSuggest = GetCell(parsed, "JH Suggest", "Jh Suggest"),
-                InterviewCharges = ParseDecimal(GetCell(parsed, "Interview Charges", "Charges")),
-                JhDue = ParseDecimal(GetCell(parsed, "JH Due", "Jh Due")),
-                FirstPaymentOnJob = ParseDecimal(GetCell(parsed, "First Payment On Job", "First Payment")),
-                SecondPaymentOnJob = ParseDecimal(GetCell(parsed, "Second Payment On Job", "Second Payment")),
-                BalancePayable = ParseDecimal(GetCell(parsed, "Balance Payable", "Balance")),
+                FirstSalary = GetCanonicalValue(parsed, "FirstSalary"),
+                JhSuggest = GetCanonicalValue(parsed, "JhSuggest"),
+                InterviewCharges = ParseDecimal(GetCanonicalValue(parsed, "InterviewCharges")),
+                JhDue = ParseDecimal(GetCanonicalValue(parsed, "JhDue")),
+                FirstPaymentOnJob = ParseDecimal(GetCanonicalValue(parsed, "FirstPaymentOnJob")),
+                SecondPaymentOnJob = ParseDecimal(GetCanonicalValue(parsed, "SecondPaymentOnJob")),
+                BalancePayable = ParseDecimal(GetCanonicalValue(parsed, "BalancePayable")),
                 Stack = DetectStack(parsed),
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -273,26 +361,6 @@ namespace RizvizERP.API.Controllers
 
         public static Interview MapRowToInterview(ParsedInterviewRow parsed) => MapParsedRow(parsed);
 
-        private static string GetCell(ParsedInterviewRow row, params string[] headerNames)
-        {
-            foreach (var name in headerNames)
-            {
-                if (row.ByHeader.TryGetValue(name, out var exact) && !string.IsNullOrWhiteSpace(exact))
-                    return exact.Trim();
-            }
-
-            foreach (var name in headerNames)
-            {
-                var key = row.ByHeader.Keys.FirstOrDefault(k =>
-                    k != null && k.Replace(" ", "").Replace(":", "")
-                        .Equals(name.Replace(" ", "").Replace(":", ""), StringComparison.OrdinalIgnoreCase));
-                if (key != null && !string.IsNullOrWhiteSpace(row.ByHeader[key]))
-                    return row.ByHeader[key].Trim();
-            }
-
-            return null;
-        }
-
         private static Interview MapLongFormatRow(string[] cols, DateTime now) =>
             new Interview
             {
@@ -321,8 +389,16 @@ namespace RizvizERP.API.Controllers
 
         private static string DetectStack(ParsedInterviewRow parsed)
         {
-            var text = GetCell(parsed, "INTERVIEW FOR :", "INTERVIEW FOR", "Interview For") ?? "";
-            return DetectStackFromText(text);
+            var stackFromExcel = GetCanonicalValue(parsed, "StackName");
+            if (!string.IsNullOrWhiteSpace(stackFromExcel))
+                return stackFromExcel.Trim();
+
+            var interviewFor = GetCanonicalValue(parsed, "InterviewFor") ?? "";
+            var detected = DetectStackFromText(interviewFor);
+            if (detected != null) return detected;
+
+            var candidateName = GetCanonicalValue(parsed, "IntervieweeName") ?? "";
+            return DetectStackFromText(candidateName);
         }
 
         private static string DetectStackFromText(string text)
@@ -333,10 +409,12 @@ namespace RizvizERP.API.Controllers
                 return "AI/ML";
             if (lower.Contains("snow") || lower.Contains("snowflake"))
                 return "Snow";
-            if (lower.Contains("data") && !lower.Contains("data entry"))
-                return "Data";
             if (lower.Contains("devops") || lower.Contains("dev ops") || lower.Contains("dev-ops"))
                 return "DevOps";
+            if (lower.Contains("data sc") || lower.Contains("data science") || lower.Contains("data scientist"))
+                return "Data Sc.";
+            if (lower.Contains("data") && !lower.Contains("data entry"))
+                return "Data";
             return null;
         }
 
@@ -429,7 +507,6 @@ namespace RizvizERP.API.Controllers
             return 0;
         }
 
-        /// <summary>Read CSV even when Excel has the file open (must Save in Excel for changes to appear).</summary>
         private static string[] ReadAllLinesAllowingShare(string filePath)
         {
             using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);

@@ -5,14 +5,14 @@ import {
   CalendarOutlined, InfoCircleOutlined, WarningOutlined, TrophyOutlined
 } from '@ant-design/icons';
 import StatCard from '../StatCard';
-import { STATUS_PILL_COLORS } from '../../utils/interviewStatusUtils';
+import { STATUS_PILL_COLORS, getStatusColor } from '../../utils/interviewStatusUtils';
 
 const { Text } = Typography;
 const STATUS_CARD_HEIGHT = 90;
 
 const getPalette = (status) => {
-  const key = String(status || '').trim().toLowerCase();
-  return STATUS_PILL_COLORS[key] || STATUS_PILL_COLORS.default;
+  const colorKey = getStatusColor(status);
+  return STATUS_PILL_COLORS[colorKey] || STATUS_PILL_COLORS.default;
 };
 
 const getStatusIcon = (status) => {

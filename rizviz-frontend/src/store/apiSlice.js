@@ -328,6 +328,10 @@ export const apiSlice = createApi({
       query: () => '/interviews/company-names',
       providesTags: ['Interviews'],
     }),
+    getInterviewStackNames: builder.query({
+      query: () => '/interviews/stack-names',
+      providesTags: ['Interviews'],
+    }),
     getInterviewStats: builder.query({
       query: () => '/interviews/stats',
       providesTags: ['Interviews'],
@@ -568,6 +572,7 @@ export const {
   useGetInterviewCandidatesQuery,
   useGetInterviewCandidateNamesQuery,
   useGetInterviewCompanyNamesQuery,
+  useGetInterviewStackNamesQuery,
   useCreateInterviewMutation,
   useUpdateInterviewMutation,
   useDeleteInterviewMutation,

@@ -25,7 +25,7 @@ const cellRender = (header, formatDate) => (_, record) => {
     return d !== '—' ? d : s;
   }
   if (header.toLowerCase().includes('status')) {
-    return <InterviewStatusBadge status={s} />;
+    return <InterviewStatusBadge status={s} record={record} />;
   }
   return (
     <Tooltip title={s}>
@@ -58,7 +58,7 @@ const cellRender = (header, formatDate) => (_, record) => {
   },
   { title: 'Company', dataIndex: 'CompanyName', key: 'CompanyName', width: 120, render: (t) => <Tag color="blue" className="m-0">{t || '—'}</Tag> },
   { title: 'Type', dataIndex: 'InterviewType', key: 'InterviewType', width: 100, ellipsis: true, render: (t) => t || '—' },
-  { title: 'Status', dataIndex: 'Status', key: 'Status', width: 110, fixed: 'right', render: (s) => <InterviewStatusBadge status={s} /> },
+  { title: 'Status', dataIndex: 'Status', key: 'Status', width: 110, fixed: 'right', render: (s, record) => <InterviewStatusBadge status={s} record={record} /> },
   { title: 'Stack', dataIndex: 'Stack', key: 'Stack', width: 100, render: (t) => t || '—' },
   { title: 'Interview Date', dataIndex: 'InterviewDate', key: 'InterviewDate', width: 115, render: formatDate },
   { title: 'Job Start', dataIndex: 'JobStartDate', key: 'JobStartDate', width: 115, render: formatDate },

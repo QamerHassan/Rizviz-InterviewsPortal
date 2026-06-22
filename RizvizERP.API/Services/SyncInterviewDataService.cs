@@ -101,6 +101,19 @@ namespace RizvizERP.API.Services
                 var parsedRows = SeedHelper.ParseInterviewFile(tempPath);
                 result.TotalRows = parsedRows.Count;
 
+                if (parsedRows.Count > 0)
+                {
+                    var firstRowHeaders = parsedRows[0].Headers;
+                    if (!SeedHelper.HasRequiredHeaders(firstRowHeaders, out var missingRequired))
+                    {
+                        var missingStr = string.Join(", ", missingRequired);
+                        var errMsg = $"Required column(s) missing from sheet: {missingStr}. Rows skipped.";
+                        result.Errors.Add(errMsg);
+                        result.FailedRows += parsedRows.Count;
+                        parsedRows.Clear();
+                    }
+                }
+
                 if (doReplaceAll)
                 {
                     var allExisting = _context.Interviews.ToList();
@@ -139,6 +152,11 @@ namespace RizvizERP.API.Services
                         if (string.IsNullOrWhiteSpace(incoming.IntervieweeName))
                         {
                             result.FailedRows++;
+                            if (result.Errors.Count < 20)
+                            {
+                                var srVal = SeedHelper.GetCanonicalValue(parsed, "Sr");
+                                result.Errors.Add($"Row {(string.IsNullOrWhiteSpace(srVal) ? "with empty Sr" : "SR: " + srVal)} skipped: Candidate/Interviewee Name is blank.");
+                            }
                             continue;
                         }
 
