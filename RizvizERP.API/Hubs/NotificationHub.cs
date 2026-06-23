@@ -23,15 +23,7 @@ namespace RizvizERP.API.Hubs
 
             if (!string.IsNullOrEmpty(token))
             {
-                if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    token = token.Substring(7);
-                }
-
-                if (token.StartsWith("db_jwt_mock_token_key_for_", StringComparison.OrdinalIgnoreCase))
-                {
-                    username = token.Substring("db_jwt_mock_token_key_for_".Length);
-                }
+                username = AuthHelper.GetUsernameFromToken(token);
             }
 
             if (!string.IsNullOrEmpty(username))

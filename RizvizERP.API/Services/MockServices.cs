@@ -210,9 +210,10 @@ namespace RizvizERP.API.Services
                 _currentUserId = user.Id;
                 _currentUserRole = user.RoleName;
 
+                var sessionId = Guid.NewGuid().ToString("N");
                 return new LoginResponse
                 {
-                    Token = "db_jwt_mock_token_key_for_" + user.Username,
+                    Token = "db_jwt_mock_token_key_for_" + user.Username + "_session_" + sessionId,
                     RefreshToken = $"mock-refresh-token-{Guid.NewGuid()}",
                     UserId = user.Id,
                     Username = user.Username,
@@ -229,15 +230,13 @@ namespace RizvizERP.API.Services
 
         public LoginResponse RefreshToken(TokenRefreshRequest request)
         {
-            const string prefix = "db_jwt_mock_token_key_for_";
             var originalToken = request.Token ?? "";
-            var username = originalToken.StartsWith(prefix)
-                ? originalToken.Substring(prefix.Length)
-                : "Rizviz";
+            var username = AuthHelper.GetUsernameFromToken(originalToken) ?? "Rizviz";
+            var sessionId = AuthHelper.GetSessionIdFromToken(originalToken) ?? Guid.NewGuid().ToString("N");
 
             return new LoginResponse
             {
-                Token = prefix + username,
+                Token = "db_jwt_mock_token_key_for_" + username + "_session_" + sessionId,
                 RefreshToken = $"mock-refresh-token-refreshed-{Guid.NewGuid()}",
                 UserId = 1,
                 Username = username,

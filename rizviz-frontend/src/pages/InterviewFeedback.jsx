@@ -13,8 +13,10 @@ import { useSelector } from 'react-redux';
 import {
   useGetFeedbacksQuery,
   useSaveFeedbackMutation, useDeleteFeedbackMutation,
-  useGetFeedbackDropdownsQuery
+  useGetFeedbackDropdownsQuery,
+  useGetExcelSessionStatusQuery,
 } from '../store/apiSlice';
+import ExcelUploadRequired from '../components/ExcelUploadRequired';
 import {
   interviewers as allInterviewers,
   interviewees as allInterviewees,
@@ -49,6 +51,10 @@ const InterviewFeedback = () => {
   });
   const [saveFeedbackMutation, { isLoading: isSaving }] = useSaveFeedbackMutation();
   const [deleteFeedback] = useDeleteFeedbackMutation();
+
+  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
+    skip: role !== 'Admin',
+  });
 
   // Local state for Voice / Text input mode
   const [inputMode, setInputMode] = useState('voice');
@@ -117,6 +123,10 @@ const InterviewFeedback = () => {
     if (names.size === 0) return allInterviewees;
     return allInterviewees.filter(i => names.has(i.value));
   }, [selectedInterviewer]);
+
+  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
+    return <ExcelUploadRequired />;
+  }
 
 
   // Table Columns

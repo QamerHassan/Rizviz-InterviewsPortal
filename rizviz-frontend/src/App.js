@@ -27,6 +27,7 @@ import AuditLogs from './pages/AuditLogs';
 import InterviewFeedback from './pages/InterviewFeedback';
 import UserManagement from './pages/UserManagement';
 import FirstLoginModal from './components/auth/FirstLoginModal';
+import ExcelSyncPoller from './components/ExcelSyncPoller';
 
 
 // App css imports
@@ -84,6 +85,7 @@ const AppThemeWrapper = () => {
                 <ProtectedRoute>
                   <>
                     <FirstLoginModal />
+                    <ExcelSyncPoller />
                     <MainLayout />
                   </>
                 </ProtectedRoute>

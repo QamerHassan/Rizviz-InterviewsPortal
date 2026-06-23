@@ -765,18 +765,11 @@ namespace RizvizERP.API.Services
 
         private string GetExcelFilePath()
         {
-            var path = _config["ExcelSettings:InterviewFilePath"];
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                return path;
+            var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            if (File.Exists(lastUploadedPath))
+                return lastUploadedPath;
 
-            var preferred = _config["InterviewSync:PreferredLocalFile"] ?? "Interview Software.xlsx";
-            var rootPath = Path.Combine(Directory.GetCurrentDirectory(), "..", preferred);
-            if (File.Exists(rootPath)) return rootPath;
-
-            var sameDirPath = Path.Combine(Directory.GetCurrentDirectory(), preferred);
-            if (File.Exists(sameDirPath)) return sameDirPath;
-
-            return rootPath;
+            return null;
         }
 
         private Interview FindExcelMatch(int? srVal, string candidateName, string companyName, string interviewType, string dateStr)

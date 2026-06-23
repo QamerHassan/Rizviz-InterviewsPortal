@@ -191,9 +191,10 @@ namespace RizvizERP.API.Services
 
             if (user == null) return null;
 
+            var sessionId = Guid.NewGuid().ToString("N");
             return new LoginResponse
             {
-                Token = "db_jwt_mock_token_key_for_" + user.Username,
+                Token = "db_jwt_mock_token_key_for_" + user.Username + "_session_" + sessionId,
                 RefreshToken = "db_refresh_token_key_" + Guid.NewGuid().ToString("N"),
                 UserId = user.Id,
                 Username = user.Username,
@@ -208,19 +209,15 @@ namespace RizvizERP.API.Services
 
         public LoginResponse RefreshToken(TokenRefreshRequest request)
         {
-            // Parse the original token to preserve the username so GetCurrentUser()
-            // checks (which expect "db_jwt_mock_token_key_for_<username>") keep working.
-            const string prefix = "db_jwt_mock_token_key_for_";
             var originalToken = request.Token ?? "";
-            var username = originalToken.StartsWith(prefix)
-                ? originalToken.Substring(prefix.Length)
-                : "user";
+            var username = AuthHelper.GetUsernameFromToken(originalToken) ?? "user";
+            var sessionId = AuthHelper.GetSessionIdFromToken(originalToken) ?? Guid.NewGuid().ToString("N");
 
             var user = AuthHelper.GetUserByUsername(username);
 
             return new LoginResponse
             {
-                Token = prefix + username,
+                Token = "db_jwt_mock_token_key_for_" + username + "_session_" + sessionId,
                 RefreshToken = "db_refresh_token_key_" + Guid.NewGuid().ToString("N"),
                 UserId = user?.Id ?? 1,
                 Username = username,

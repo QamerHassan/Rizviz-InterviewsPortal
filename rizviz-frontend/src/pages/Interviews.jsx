@@ -27,8 +27,10 @@ import {
   useGetInterviewSyncStatusQuery,
   useLazyGetLastSyncResultQuery,
   useGetInterviewHistoryQuery,
+  useGetExcelSessionStatusQuery,
 } from '../store/apiSlice';
 import { useSelector } from 'react-redux';
+import ExcelUploadRequired from '../components/ExcelUploadRequired';
 import InterviewStatusBadge from '../components/interviews/InterviewStatusBadge';
 import InterviewSyncSummaryModal from '../components/interviews/InterviewSyncSummaryModal';
 import InterviewHistoryModal from '../components/interviews/InterviewHistoryModal';
@@ -210,6 +212,9 @@ const Interviews = () => {
   const { data: companyNames = [] } = useGetInterviewCompanyNamesQuery();
   const { data: stackNames = [] } = useGetInterviewStackNamesQuery();
   const [triggerGetLastSyncResult] = useLazyGetLastSyncResultQuery();
+  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
+    skip: role !== 'Admin',
+  });
 
   const allStacks = useMemo(() => {
     const combined = [...DEFAULT_STACKS, ...stackNames];
@@ -500,6 +505,10 @@ const Interviews = () => {
 
   const tableScrollX = Math.max(1400, tableColumns.reduce((sum, c) => sum + (c.width || 120), 0));
 
+  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
+    return <ExcelUploadRequired />;
+  }
+
   return (
     <div className="space-y-5" style={{ overflowX: 'visible' }}>
       <div className="flex flex-col gap-3">
@@ -661,6 +670,7 @@ const Interviews = () => {
               dataSource={rows}
               rowKey="Id"
               loading={isLoading}
+              locale={{ emptyText: 'No data. Please upload Excel file.' }}
               rowClassName={(record, i) => {
                 const highlight = getRowHighlightClass(record);
                 if (highlight) return highlight;

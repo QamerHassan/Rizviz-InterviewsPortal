@@ -50,9 +50,8 @@ namespace RizvizERP.API.Controllers
         private User GetCurrentUser()
         {
             var authHeader = Request.Headers["Authorization"].ToString();
-            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer db_jwt_mock_token_key_for_"))
-                return null;
-            var username = authHeader.Substring("Bearer db_jwt_mock_token_key_for_".Length);
+            var username = AuthHelper.GetUsernameFromToken(authHeader);
+            if (string.IsNullOrEmpty(username)) return null;
             return AuthHelper.GetUserByUsername(username);
         }
 
@@ -61,21 +60,11 @@ namespace RizvizERP.API.Controllers
 
         private string GetExcelFilePath()
         {
-            // Try config path first
-            var path = _config["ExcelSettings:InterviewFilePath"];
-            if (!string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path))
-                return path;
+            var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            if (System.IO.File.Exists(lastUploadedPath))
+                return lastUploadedPath;
 
-            // Try preferred local file (root of repo)
-            var preferred = _config["InterviewSync:PreferredLocalFile"] ?? "Interview Software.xlsx";
-            var rootPath = Path.Combine(Directory.GetCurrentDirectory(), "..", preferred);
-            if (System.IO.File.Exists(rootPath)) return rootPath;
-
-            // Try same directory
-            var sameDirPath = Path.Combine(Directory.GetCurrentDirectory(), preferred);
-            if (System.IO.File.Exists(sameDirPath)) return sameDirPath;
-
-            return rootPath; // return preferred path even if missing (caller checks existence)
+            return null;
         }
 
         // ─── GET /api/feedback ───────────────────────────────────────────────

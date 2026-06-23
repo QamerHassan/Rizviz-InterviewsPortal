@@ -46,12 +46,11 @@ namespace RizvizERP.API.Controllers
 
         private string GetExcelFilePath()
         {
-            var path = _configuration["ExcelSettings:InterviewFilePath"];
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                path = Path.Combine(Directory.GetCurrentDirectory(), "Data", "interviews.xlsx");
-            }
-            return path;
+            var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            if (System.IO.File.Exists(lastUploadedPath))
+                return lastUploadedPath;
+
+            return null;
         }
 
         [Microsoft.AspNetCore.Authorization.Authorize]
@@ -63,18 +62,9 @@ namespace RizvizERP.API.Controllers
                                ?? User.FindFirst("name")?.Value;
 
             var filePath = GetExcelFilePath();
-            if (!System.IO.File.Exists(filePath))
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
             {
-                // Fallback to repository root "Interview Software.xlsx" if it exists
-                var fallbackPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "Interview Software.xlsx");
-                if (System.IO.File.Exists(fallbackPath))
-                {
-                    filePath = fallbackPath;
-                }
-                else
-                {
-                    return NotFound(new { success = false, message = $"Excel file not found at: {filePath}" });
-                }
+                return NotFound(new { success = false, message = "No Excel file has been uploaded yet. Please upload an Excel/CSV file first." });
             }
 
             await _fileLock.WaitAsync();
@@ -205,17 +195,9 @@ namespace RizvizERP.API.Controllers
             }
 
             var filePath = GetExcelFilePath();
-            if (!System.IO.File.Exists(filePath))
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
             {
-                var fallbackPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "Interview Software.xlsx");
-                if (System.IO.File.Exists(fallbackPath))
-                {
-                    filePath = fallbackPath;
-                }
-                else
-                {
-                    return NotFound(new { success = false, message = $"Excel file not found at: {filePath}" });
-                }
+                return NotFound(new { success = false, message = "No Excel file has been uploaded yet. Please upload an Excel/CSV file first." });
             }
 
             await _fileLock.WaitAsync();

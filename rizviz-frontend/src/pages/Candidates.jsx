@@ -1,20 +1,30 @@
 import React, { useState } from 'react';
 import { Input, Row, Col, Typography, Spin } from 'antd';
 import { SearchOutlined, TeamOutlined } from '@ant-design/icons';
-import { useGetInterviewCandidatesQuery } from '../store/apiSlice';
+import { useGetInterviewCandidatesQuery, useGetExcelSessionStatusQuery } from '../store/apiSlice';
 import { useSelector } from 'react-redux';
 import CandidateDrawer from '../components/interviews/CandidateDrawer';
+import ExcelUploadRequired from '../components/ExcelUploadRequired';
 
 const { Title, Text } = Typography;
 
 const Candidates = () => {
   const isDarkMode = useSelector((state) => state.theme.isDarkMode);
+  const { role } = useSelector((state) => state.auth);
   const [search, setSearch] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+
+  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
+    skip: role !== 'Admin',
+  });
 
   const { data: candidates = [], isFetching } = useGetInterviewCandidatesQuery(
     { search: search || undefined }
   );
+
+  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
+    return <ExcelUploadRequired />;
+  }
 
   const headingColor = isDarkMode ? '#f1f5f9' : '#1e293b';
   const subColor = isDarkMode ? '#94a3b8' : '#64748b';

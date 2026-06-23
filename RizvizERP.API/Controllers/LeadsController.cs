@@ -23,10 +23,8 @@ namespace RizvizERP.API.Controllers
         private User GetCurrentUser()
         {
             var authHeader = Request.Headers["Authorization"].ToString();
-            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer db_jwt_mock_token_key_for_"))
-                return null;
-            
-            var username = authHeader.Substring("Bearer db_jwt_mock_token_key_for_".Length);
+            var username = AuthHelper.GetUsernameFromToken(authHeader);
+            if (string.IsNullOrEmpty(username)) return null;
             return AuthHelper.GetUserByUsername(username);
         }
 
@@ -42,7 +40,10 @@ namespace RizvizERP.API.Controllers
 
         private IQueryable<Interview> GetUserInterviewsQuery(User user)
         {
-            var query = _context.Interviews.AsNoTracking();
+            var authHeader = Request.Headers["Authorization"].ToString();
+            var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+            var state = SessionExcelManager.GetState(sessionId);
+            var query = (state != null && state.HasUploaded) ? state.Interviews.AsQueryable() : new List<Interview>().AsQueryable();
 
             if (user == null)
                 return query.Where(i => false);

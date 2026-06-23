@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Dropdown, Space, Avatar, Typography, Select, Button, App, Badge, List, Popover, Modal, Descriptions } from 'antd';
+import { Layout, Dropdown, Space, Avatar, Typography, Select, Button, App, Badge, List, Popover, Modal, Descriptions, Card } from 'antd';
 import {
   UserOutlined,
   LogoutOutlined,
@@ -8,12 +8,21 @@ import {
   DeploymentUnitOutlined,
   MenuOutlined,
   BellOutlined,
-  SearchOutlined
+  SearchOutlined,
+  ImportOutlined,
+  InboxOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
-import { Input } from 'antd';
+import { Input, Upload, Table } from 'antd';
 import { useSelector, useDispatch } from 'react-redux';
 import { logOut, setCredentials } from '../store/authSlice';
-import { apiSlice, useGetCompaniesQuery, useGetBranchesQuery } from '../store/apiSlice';
+import { 
+  apiSlice, 
+  useGetCompaniesQuery, 
+  useGetBranchesQuery,
+  useSyncUploadInterviewsMutation,
+  useConfirmExcelUploadMutation
+} from '../store/apiSlice';
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 import dayjs from 'dayjs';
 
@@ -28,6 +37,50 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
 
   const { data: companies = [] } = useGetCompaniesQuery();
   const { data: branches = [] } = useGetBranchesQuery(companyCode, { skip: !companyCode });
+
+  const [syncUpload, { isLoading: isSyncing }] = useSyncUploadInterviewsMutation();
+  const [confirmUpload, { isLoading: isConfirming }] = useConfirmExcelUploadMutation();
+  
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState(null);
+  const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
+
+  const handleUploadFile = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const hide = message.loading('Uploading and parsing your Excel sheet...', 0);
+    try {
+      const response = await syncUpload(formData).unwrap();
+      hide();
+      
+      if (response.requiresConfirmation) {
+        setPendingDiff(response.diff);
+        setIsDiffModalOpen(true);
+      } else {
+        message.success(response.message || 'Excel loaded successfully. Enjoy your workspace!');
+        dispatch(apiSlice.util.invalidateTags(['Interviews', 'Leads']));
+        setIsUploadModalOpen(false);
+      }
+    } catch (err) {
+      hide();
+      message.error(err?.data?.message || 'Failed to upload Excel. Make sure required columns are present.');
+    }
+    return false; // Prevent auto-upload
+  };
+
+  const handleConfirmSync = async () => {
+    try {
+      await confirmUpload().unwrap();
+      message.success('Workspace updated successfully.');
+      setIsDiffModalOpen(false);
+      setPendingDiff(null);
+      setIsUploadModalOpen(false);
+      dispatch(apiSlice.util.invalidateTags(['Interviews', 'Leads']));
+    } catch (err) {
+      message.error(err?.data?.message || 'Sync confirmation failed.');
+    }
+  };
 
   // Notifications state loaded from localStorage to survive page refresh
   const [notifications, setNotifications] = useState(() => {
@@ -204,6 +257,10 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
           duration: 7
         });
 
+        // Trigger a custom event to notify ExcelSyncPoller to fetch details and show modal
+        const event = new CustomEvent('excel-sync-complete', { detail: syncData });
+        window.dispatchEvent(event);
+
         // Add a read/unread notification to the notifications list
         setNotifications(prev => [
           {
@@ -223,6 +280,50 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
           ...prev
         ]);
       }
+    });
+
+    // ── Real-time disk-level file change detection ────────────────────────────
+    // Fired by ExcelFileWatcherService when last_uploaded_excel.xlsx changes on disk.
+    // Dispatches a window event so ExcelSyncPoller can show the diff popup instantly.
+    connection.on('ExcelFileChanged', (data) => {
+      console.log('[SignalR] 📂 ExcelFileChanged received:', data);
+      if (!data?.hasChanges) return;
+
+      // Invalidate interviews cache so the table refreshes automatically
+      dispatch(apiSlice.util.invalidateTags(['Interviews', 'Leads']));
+
+      // Play a chime to grab admin attention
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+        osc.frequency.setValueAtTime(987.77, audioCtx.currentTime + 0.12); // B5
+        gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.6);
+      } catch (e) {
+        console.warn('[SignalR] Audio chime blocked:', e.message);
+      }
+
+      // Show an AntD toast notification
+      const insCount = (data.inserted || []).length;
+      const delCount = (data.deleted || []).length;
+      const updCount = (data.updated || []).length;
+      notificationApiRef.current.warning({
+        message: '📂 Excel File Changed on Disk',
+        description: `Detected: ${insCount} new, ${delCount} removed, ${updCount} modified rows.`,
+        placement: 'topRight',
+        duration: 8
+      });
+
+      // Dispatch a window event for ExcelSyncPoller to pick up and show the full modal
+      const event = new CustomEvent('excel-file-changed', { detail: data });
+      window.dispatchEvent(event);
     });
 
     connection.start()
@@ -480,6 +581,17 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0, marginLeft: 'auto' }}>
+        {role === 'Admin' && (
+          <Button
+            type="primary"
+            icon={<ImportOutlined />}
+            onClick={() => setIsUploadModalOpen(true)}
+            className="bg-[#4f46e5] text-white border-none rounded-full font-bold text-xs"
+            size="small"
+          >
+            Upload Excel
+          </Button>
+        )}
         {/* Real-time Notification Bell Popover */}
         <Popover
           content={notificationContent}
@@ -574,6 +686,146 @@ const TopNavbar = ({ onMobileMenuClick, isMobile, sidebarCollapsed, onSidebarTog
             </Descriptions>
           </div>
         ) : null}
+      </Modal>
+
+      {/* UPLOAD EXCEL MODAL */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2 border-b pb-3 mb-2">
+            <ImportOutlined className="text-indigo-500" />
+            <span style={{ fontSize: 16, fontWeight: 600 }}>Upload Excel File</span>
+          </div>
+        }
+        open={isUploadModalOpen}
+        onCancel={() => setIsUploadModalOpen(false)}
+        footer={null}
+        width={550}
+        centered
+      >
+        <div className="py-4 space-y-4">
+          <Typography.Paragraph type="secondary" className="text-xs">
+            Upload a spreadsheet (Excel or CSV) containing recruitment data. Your session data will be updated and synchronized.
+          </Typography.Paragraph>
+          
+          <Upload.Dragger
+            accept=".xlsx,.csv"
+            multiple={false}
+            beforeUpload={handleUploadFile}
+            showUploadList={false}
+            disabled={isSyncing}
+            className="border-dashed border-2 hover:border-indigo-500 transition-all rounded-xl p-6 bg-slate-50/50 dark:bg-slate-900/40"
+          >
+            <p className="ant-upload-drag-icon text-indigo-500 text-3xl mb-2">
+              <InboxOutlined />
+            </p>
+            <p className="ant-upload-text font-bold text-slate-700 dark:text-slate-200 text-sm">
+              Click or drag file to this area to upload
+            </p>
+            <p className="ant-upload-hint text-[10px] text-slate-400 mt-1">
+              Required columns: <Typography.Text code>SR.NO</Typography.Text>, <Typography.Text code>IntervieweeName</Typography.Text>
+            </p>
+          </Upload.Dragger>
+        </div>
+      </Modal>
+
+      {/* SYNC CONFIRMATION MODAL */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2 border-b pb-3 mb-2">
+            <WarningOutlined className="text-amber-500" />
+            <span style={{ fontSize: 16, fontWeight: 600 }}>Review Changes Before Confirmation</span>
+          </div>
+        }
+        open={isDiffModalOpen}
+        onOk={handleConfirmSync}
+        onCancel={() => setIsDiffModalOpen(false)}
+        okText="Confirm Sync"
+        okButtonProps={{ className: 'bg-indigo-600 hover:bg-indigo-700', loading: isConfirming }}
+        cancelText="Cancel"
+        width={750}
+        centered
+      >
+        {pendingDiff && (
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            <Typography.Text type="secondary" className="block mb-2 text-xs">
+              This Excel file contains changes compared to the active session data. Please review the diff list below:
+            </Typography.Text>
+
+            {(pendingDiff.inserted || []).length > 0 && (
+              <Card 
+                size="small" 
+                title={<span className="text-emerald-600 font-black"><Badge status="success" /> New Candidates to Add ({(pendingDiff.inserted || []).length})</span>} 
+                className="border-emerald-100 bg-emerald-50/20 dark:bg-emerald-950/10 mb-3"
+              >
+                <Table 
+                  dataSource={pendingDiff.inserted} 
+                  columns={[
+                    { title: 'SR', dataIndex: 'Sr', key: 'Sr', width: 60 },
+                    { title: 'Candidate', dataIndex: 'IntervieweeName', key: 'IntervieweeName', className: 'font-bold' },
+                    { title: 'Company', dataIndex: 'CompanyName', key: 'CompanyName' },
+                    { title: 'Status', dataIndex: 'Status', key: 'Status', render: (val) => <Badge status="success" text={val} /> },
+                  ]} 
+                  rowKey={(r) => r.Sr || r.IntervieweeName} 
+                  pagination={false} 
+                  size="small" 
+                />
+              </Card>
+            )}
+
+            {(pendingDiff.deleted || []).length > 0 && (
+              <Card 
+                size="small" 
+                title={<span className="text-rose-600 font-black"><Badge status="error" /> Candidates to Remove ({(pendingDiff.deleted || []).length})</span>} 
+                className="border-rose-100 bg-rose-50/20 dark:bg-rose-950/10 mb-3"
+              >
+                <Table 
+                  dataSource={pendingDiff.deleted} 
+                  columns={[
+                    { title: 'SR', dataIndex: 'Sr', key: 'Sr', width: 60 },
+                    { title: 'Candidate', dataIndex: 'IntervieweeName', key: 'IntervieweeName', className: 'line-through text-red-500' },
+                    { title: 'Company', dataIndex: 'CompanyName', key: 'CompanyName' },
+                    { title: 'Status', dataIndex: 'Status', key: 'Status', render: (val) => <Badge status="error" text={val} /> },
+                  ]} 
+                  rowKey={(r) => r.Sr || r.IntervieweeName} 
+                  pagination={false} 
+                  size="small" 
+                />
+              </Card>
+            )}
+
+            {(pendingDiff.updated || []).length > 0 && (
+              <Card 
+                size="small" 
+                title={<span className="text-amber-600 font-black"><Badge status="warning" /> Candidates to Modify ({(pendingDiff.updated || []).length})</span>} 
+                className="border-amber-100 bg-amber-50/20 dark:bg-amber-950/10"
+              >
+                <Table 
+                  dataSource={pendingDiff.updated} 
+                  columns={[
+                    { title: 'SR', dataIndex: 'sr', key: 'sr', width: 60 },
+                    { title: 'Candidate', dataIndex: 'intervieweeName', key: 'intervieweeName', className: 'font-bold' },
+                    { title: 'Field Changed', dataIndex: 'changedField', key: 'changedField' },
+                    { 
+                      title: 'Old Value', 
+                      dataIndex: 'oldValue', 
+                      key: 'oldValue', 
+                      render: (val) => <span className="line-through text-red-400">{val || 'N/A'}</span> 
+                    },
+                    { 
+                      title: 'New Value', 
+                      dataIndex: 'newValue', 
+                      key: 'newValue', 
+                      render: (val) => <span className="text-emerald-500 font-extrabold">{val || 'N/A'}</span> 
+                    },
+                  ]} 
+                  rowKey={(r) => r.id || Math.random()} 
+                  pagination={false} 
+                  size="small" 
+                />
+              </Card>
+            )}
+          </div>
+        )}
       </Modal>
     </Header>
   );

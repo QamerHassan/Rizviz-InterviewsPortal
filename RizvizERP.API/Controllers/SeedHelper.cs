@@ -85,6 +85,12 @@ namespace RizvizERP.API.Controllers
             missingRequired = new List<string>();
             var normalizedHeaders = headers.Select(NormalizeHeaderForMatching).ToHashSet(StringComparer.OrdinalIgnoreCase);
             
+            var srAliases = AliasMap["Sr"].Select(NormalizeHeaderForMatching);
+            if (!srAliases.Any(a => normalizedHeaders.Contains(a)))
+            {
+                missingRequired.Add("SR.NO");
+            }
+
             var intervieweeAliases = AliasMap["IntervieweeName"].Select(NormalizeHeaderForMatching);
             if (!intervieweeAliases.Any(a => normalizedHeaders.Contains(a)))
             {

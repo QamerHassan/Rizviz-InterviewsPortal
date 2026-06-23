@@ -340,5 +340,37 @@ namespace RizvizERP.API.Services
             }
             return false;
         }
+
+        public static string GetSessionIdFromToken(string authHeader)
+        {
+            if (string.IsNullOrEmpty(authHeader)) return null;
+            var bearerPrefix = "Bearer ";
+            var token = authHeader.StartsWith(bearerPrefix) ? authHeader.Substring(bearerPrefix.Length) : authHeader;
+            var sessionIndex = token.IndexOf("_session_");
+            if (sessionIndex >= 0)
+            {
+                return token.Substring(sessionIndex + "_session_".Length);
+            }
+            return null;
+        }
+
+        public static string GetUsernameFromToken(string authHeader)
+        {
+            if (string.IsNullOrEmpty(authHeader)) return null;
+            var bearerPrefix = "Bearer ";
+            var token = authHeader.StartsWith(bearerPrefix) ? authHeader.Substring(bearerPrefix.Length) : authHeader;
+            var prefix = "db_jwt_mock_token_key_for_";
+            if (token.StartsWith(prefix))
+            {
+                var usernamePart = token.Substring(prefix.Length);
+                var sessionIndex = usernamePart.IndexOf("_session_");
+                if (sessionIndex >= 0)
+                {
+                    return usernamePart.Substring(0, sessionIndex);
+                }
+                return usernamePart;
+            }
+            return null;
+        }
     }
 }

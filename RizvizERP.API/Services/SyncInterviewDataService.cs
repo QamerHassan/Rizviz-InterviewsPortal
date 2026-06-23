@@ -520,46 +520,11 @@ namespace RizvizERP.API.Services
 
         private string ResolveSourcePath()
         {
-            var isDevelopment = string.Equals(
-                Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), 
-                "Development", 
-                StringComparison.OrdinalIgnoreCase);
+            var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            if (File.Exists(lastUploadedPath))
+                return lastUploadedPath;
 
-            if (!isDevelopment)
-            {
-                var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_interviews.xlsx");
-                if (File.Exists(lastUploadedPath))
-                    return lastUploadedPath;
-            }
-
-            var repoRoot = GetRepoRoot();
-
-            if (!string.IsNullOrWhiteSpace(_settings.PreferredLocalFile))
-            {
-                var preferred = ResolvePreferredPath(_settings.PreferredLocalFile.Trim(), repoRoot);
-                if (File.Exists(preferred))
-                    return preferred;
-            }
-
-            foreach (var name in new[]
-                     {
-                         "Interview Software.xlsx",
-                         "interviews.xlsx",
-                         "interviews.csv",
-                         "interviews_seed.xlsx",
-                         "interviews_seed.csv"
-                     })
-            {
-                var path = Path.Combine(repoRoot, name);
-                if (File.Exists(path))
-                    return path;
-            }
-
-            var configured = _settings.NetworkFilePath?.Trim();
-            if (!string.IsNullOrEmpty(configured) && File.Exists(configured))
-                return configured;
-
-            return Path.Combine(repoRoot, _settings.PreferredLocalFile ?? "Interview Software.xlsx");
+            return null;
         }
 
         private static string ResolvePreferredPath(string configured, string repoRoot) =>

@@ -130,7 +130,7 @@ const InterviewSyncSummaryModal = ({ open, onClose, summary }) => {
         )}
 
         <Text type="secondary" className="block mt-2 text-xs">
-          Save Interview Software.xlsx (Ctrl+S), then Refresh. Rows match by Sr number.
+          Save your Excel file (Ctrl+S), then upload it or trigger synchronization. Rows match by Sr number.
         </Text>
       </Modal>
 

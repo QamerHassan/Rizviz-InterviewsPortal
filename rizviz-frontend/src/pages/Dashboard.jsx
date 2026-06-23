@@ -16,9 +16,11 @@ import {
   useGetInterviewStatusBreakdownQuery,
   useGetInterviewsPagedQuery,
   useGetLeadsQuery,
+  useGetExcelSessionStatusQuery,
 } from '../store/apiSlice';
 import dayjs from 'dayjs';
 import { useSelector } from 'react-redux';
+import ExcelUploadRequired from '../components/ExcelUploadRequired';
 
 const { Title, Text } = Typography;
 
@@ -395,9 +397,18 @@ const Dashboard = () => {
     skip: isInterviewPortalUser,
   });
 
+  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
+    skip: isInterviewPortalUser || role !== 'Admin',
+  });
+
   // Portal users: show personalized dashboard
   if (isInterviewPortalUser) {
     return <PortalDashboard isDarkMode={isDarkMode} />;
+  }
+
+  // Force Admin to upload Excel on first session load
+  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
+    return <ExcelUploadRequired />;
   }
 
   if (isHrLoading && !hrStats) {

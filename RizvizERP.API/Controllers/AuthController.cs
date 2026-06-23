@@ -160,6 +160,17 @@ namespace RizvizERP.API.Controllers
         [HttpPost("logout")]
         public IActionResult Logout()
         {
+            try
+            {
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                if (!string.IsNullOrEmpty(sessionId))
+                {
+                    SessionExcelManager.ClearState(sessionId);
+                    SessionExcelManager.ClearTemp(sessionId);
+                }
+            }
+            catch {}
             return Ok(new { message = "Logged out successfully." });
         }
 

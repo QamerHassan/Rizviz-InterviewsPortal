@@ -438,6 +438,17 @@ export const apiSlice = createApi({
     getInterviewSyncStatus: builder.query({
       query: () => '/interviews/sync-status',
     }),
+    confirmExcelUpload: builder.mutation({
+      query: () => ({
+        url: '/interviews/confirm-upload',
+        method: 'POST',
+      }),
+      invalidatesTags: ['Interviews', 'Leads'],
+    }),
+    getExcelSessionStatus: builder.query({
+      query: () => '/excel/session-status',
+      providesTags: ['Interviews'],
+    }),
     getLastSyncResult: builder.query({
       query: () => '/interviews/last-sync-result',
     }),
@@ -578,6 +589,8 @@ export const {
   useDeleteInterviewMutation,
   useSeedInterviewsMutation,
   useSyncUploadInterviewsMutation,
+  useConfirmExcelUploadMutation,
+  useGetExcelSessionStatusQuery,
   useSeedQamerDemoWeekMutation,
   useGetCandidateDetailQuery,
   useRefreshInterviewsFromExcelMutation,

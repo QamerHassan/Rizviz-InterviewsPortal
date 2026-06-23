@@ -10,9 +10,11 @@ import {
 import {
   useGetInterviewsForCalendarQuery,
   useRefreshInterviewsFromExcelMutation,
+  useGetExcelSessionStatusQuery,
 } from '../store/apiSlice';
 import { useSelector } from 'react-redux';
 import dayjs from 'dayjs';
+import ExcelUploadRequired from '../components/ExcelUploadRequired';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -229,9 +231,14 @@ const InterviewChip = ({ item, isDarkMode, onClick }) => {
 const InterviewCalendar = () => {
   const navigate = useNavigate();
   const isDarkMode = useSelector((state) => state.theme.isDarkMode);
+  const { role } = useSelector((state) => state.auth);
   const [currentMonth, setCurrentMonth] = useState(() => dayjs().startOf('month'));
   const [dayModal, setDayModal] = useState({ open: false, date: null, items: [] });
   const monthInitialized = useRef(false);
+
+  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
+    skip: role !== 'Admin',
+  });
 
   const { data, isLoading, isFetching, refetch, error } = useGetInterviewsForCalendarQuery();
   const [refreshFromExcel, { isLoading: isSyncing }] = useRefreshInterviewsFromExcelMutation();
@@ -381,6 +388,10 @@ const InterviewCalendar = () => {
         <Spin size="large" tip="Loading calendar..." />
       </div>
     );
+  }
+
+  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
+    return <ExcelUploadRequired />;
   }
 
   return (

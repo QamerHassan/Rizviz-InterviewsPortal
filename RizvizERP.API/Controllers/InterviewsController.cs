@@ -34,10 +34,8 @@ namespace RizvizERP.API.Controllers
         private User GetCurrentUser()
         {
             var authHeader = Request.Headers["Authorization"].ToString();
-            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer db_jwt_mock_token_key_for_"))
-                return null;
-            
-            var username = authHeader.Substring("Bearer db_jwt_mock_token_key_for_".Length);
+            var username = AuthHelper.GetUsernameFromToken(authHeader);
+            if (string.IsNullOrEmpty(username)) return null;
             return AuthHelper.GetUserByUsername(username);
         }
 
@@ -45,7 +43,10 @@ namespace RizvizERP.API.Controllers
         {
             get
             {
-                var query = _context.Interviews.AsNoTracking();
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                var state = SessionExcelManager.GetState(sessionId);
+                var query = (state != null && state.HasUploaded) ? state.Interviews.AsQueryable() : new List<Interview>().AsQueryable();
                 var user = GetCurrentUser();
 
                 // Unauthenticated — no token or invalid token → return nothing
@@ -376,46 +377,303 @@ namespace RizvizERP.API.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "No file uploaded." });
 
-            if (IsLiveUatReadOnly)
-                return BadRequest(new { message = "Live UAT interviews cannot be modified. Data is loaded from mkt.interview_master / interview_detail." });
+            var ext = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+            if (ext != ".xlsx" && ext != ".csv")
+                return BadRequest(new { message = "Only Excel (.xlsx) and CSV (.csv) files are supported." });
 
             try
             {
-                var persistentPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_interviews.xlsx");
-                using (var stream = new FileStream(persistentPath, FileMode.Create))
+                // Copy to a temp file
+                var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ext);
+                using (var stream = new FileStream(tempPath, FileMode.Create))
                 {
                     file.CopyTo(stream);
                 }
 
-                var result = _syncService.SyncFromExcel("ManualUploadSync", replaceAll: false, uploadFilePath: persistentPath);
-                
-                return Ok(new
+                var parsedRows = SeedHelper.ParseInterviewFile(tempPath);
+                if (parsedRows.Count > 0)
                 {
-                    totalRows = result.TotalRows,
-                    insertedRows = result.InsertedRows,
-                    updatedRows = result.UpdatedRows,
-                    unchangedRows = result.UnchangedRows,
-                    failedRows = result.FailedRows,
-                    syncedAt = result.SyncedAt,
-                    message = result.Message,
-                    errors = result.Errors,
-                    changes = result.Changes.Select(c => new
+                    var headers = parsedRows[0].Headers;
+                    if (!SeedHelper.HasRequiredHeaders(headers, out var missingRequired))
                     {
-                        c.Sr,
-                        c.IntervieweeName,
-                        c.CompanyName,
-                        c.ChangeType,
-                        c.Summary,
-                        c.FieldChanges,
-                        c.OldRow,
-                        c.NewRow,
-                        c.RowFields
-                    })
+                        var missingStr = string.Join(", ", missingRequired);
+                        return BadRequest(new { message = $"Uploaded file is missing required columns: {missingStr}." });
+                    }
+                }
+                else
+                {
+                    return BadRequest(new { message = "The uploaded file contains no rows." });
+                }
+
+                // Map parsed rows to Interviews
+                var newInterviews = new List<Interview>();
+                var syncTime = DateTime.UtcNow;
+                foreach (var parsed in parsedRows)
+                {
+                    try
+                    {
+                        var incoming = SeedHelper.MapParsedRow(parsed);
+                        if (!string.IsNullOrWhiteSpace(incoming.IntervieweeName))
+                        {
+                            incoming.InterviewCode = InterviewCodeHelper.BuildCode(incoming);
+                            incoming.Status = InterviewCodeHelper.NormalizeStatus(incoming.Status, incoming.InterviewType);
+                            incoming.LastSyncedAt = syncTime;
+                            incoming.CreatedAt = syncTime;
+                            incoming.UpdatedAt = syncTime;
+                            newInterviews.Add(incoming);
+                        }
+                    }
+                    catch { /* skip bad rows */ }
+                }
+
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var username = AuthHelper.GetUsernameFromToken(authHeader) ?? "Admin";
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                if (string.IsNullOrEmpty(sessionId))
+                    return BadRequest(new { message = "No active session. Please log in again." });
+
+                var state = SessionExcelManager.GetOrCreateState(sessionId, username);
+                var fileHash = SessionExcelManager.ComputeFileHash(tempPath);
+
+                if (!state.HasUploaded)
+                {
+                    // Copy to persistent path
+                    var destPath = ResolvePersistentPath(file.FileName);
+                    try
+                    {
+                        System.IO.File.Copy(tempPath, destPath, true);
+                    }
+                    catch { /* log or handle write error if needed */ }
+
+                    // Clean up temp file
+                    try { System.IO.File.Delete(tempPath); } catch {}
+
+                    // First upload: immediately save
+                    state.Interviews = newInterviews;
+                    state.HasUploaded = true;
+                    state.LastFileHash = fileHash;
+                    state.UploadedAt = syncTime;
+                    state.UploadedFileName = file.FileName;
+
+                    return Ok(new
+                    {
+                        requiresConfirmation = false,
+                        totalRows = newInterviews.Count,
+                        message = "First-time Excel upload accepted and loaded successfully.",
+                        fileName = file.FileName
+                    });
+                }
+                else
+                {
+                    // Subsequent upload: generate diff and request confirmation
+                    var diff = SessionExcelManager.GenerateDiff(state.Interviews, newInterviews);
+                    if (!diff.HasChanges)
+                    {
+                        state.Interviews = newInterviews;
+                        state.LastFileHash = fileHash;
+                        state.UploadedFileName = file.FileName;
+
+                        // Copy to persistent path
+                        var destPath = ResolvePersistentPath(file.FileName);
+                        try
+                        {
+                            System.IO.File.Copy(tempPath, destPath, true);
+                        }
+                        catch {}
+
+                        // Clean up temp file
+                        try { System.IO.File.Delete(tempPath); } catch {}
+
+                        return Ok(new
+                        {
+                            requiresConfirmation = false,
+                            totalRows = newInterviews.Count,
+                            message = "No changes detected. Excel data matched existing session.",
+                            fileName = file.FileName
+                        });
+                    }
+
+                    // Save new file to persistent path so ExcelSyncPoller can detect it.
+                    // IMPORTANT: do NOT update state.LastFileHash here — the old hash stays so
+                    // CheckExcelChanges detects the mismatch on the next poll and shows the notification.
+                    var destPathForPoller = ResolvePersistentPath(file.FileName);
+                    try { System.IO.File.Copy(tempPath, destPathForPoller, true); } catch {}
+
+                    // Save to temporary cache pending confirmation (for browser upload confirmation UI)
+                    SessionExcelManager.SetTempInterviews(sessionId, newInterviews);
+                    SessionExcelManager.SetTempFileHash(sessionId, fileHash);
+                    state.TempUploadedFileName = file.FileName;
+                    state.TempFilePath = tempPath;
+
+                    return Ok(new
+                    {
+                        requiresConfirmation = true,
+                        diff = new
+                        {
+                            inserted = diff.Inserted.Select(i => new { i.Sr, i.IntervieweeName, i.CompanyName, i.Status, i.InterviewDate, i.JobHunterName }),
+                            deleted  = diff.Deleted.Select(i  => new { i.Sr, i.IntervieweeName, i.CompanyName, i.Status, i.InterviewDate, i.JobHunterName }),
+                            updated  = diff.Updated
+                        },
+                        fileName = file.FileName
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("confirm-upload")]
+        public IActionResult ConfirmUploadedExcel()
+        {
+            try
+            {
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                if (string.IsNullOrEmpty(sessionId))
+                    return BadRequest(new { message = "No active session. Please log in again." });
+
+                var state = SessionExcelManager.GetState(sessionId);
+                if (state == null)
+                    return BadRequest(new { message = "Session not found." });
+
+                var tempInterviews = SessionExcelManager.GetTempInterviews(sessionId);
+                var tempHash = SessionExcelManager.GetTempFileHash(sessionId);
+
+                if (tempInterviews == null)
+                    return BadRequest(new { message = "No pending Excel confirmation found for this session." });
+
+                // Overwrite the active state
+                state.Interviews = tempInterviews;
+                state.HasUploaded = true;
+                if (!string.IsNullOrEmpty(tempHash))
+                    state.LastFileHash = tempHash;
+                state.UploadedAt = DateTime.UtcNow;
+                if (!string.IsNullOrEmpty(state.TempUploadedFileName))
+                {
+                    if (!string.IsNullOrEmpty(state.TempFilePath) && System.IO.File.Exists(state.TempFilePath))
+                    {
+                        var destPath = ResolvePersistentPath(state.TempUploadedFileName);
+                        try
+                        {
+                            System.IO.File.Copy(state.TempFilePath, destPath, true);
+                        }
+                        catch {}
+                        try { System.IO.File.Delete(state.TempFilePath); } catch {}
+                    }
+
+                    state.UploadedFileName = state.TempUploadedFileName;
+                    state.TempUploadedFileName = null;
+                    state.TempFilePath = null;
+                }
+
+                SessionExcelManager.ClearTemp(sessionId);
+
+                return Ok(new { message = "Excel changes confirmed and applied to session." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("/api/excel/session-status")]
+        public IActionResult GetSessionStatus()
+        {
+            try
+            {
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                if (string.IsNullOrEmpty(sessionId))
+                    return Ok(new { hasUploaded = false });
+
+                var state = SessionExcelManager.GetState(sessionId);
+                return Ok(new { 
+                    hasUploaded = state != null && state.HasUploaded,
+                    fileName = state?.UploadedFileName
                 });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("/api/excel/check-changes")]
+        public IActionResult CheckExcelChanges()
+        {
+            try
+            {
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                if (string.IsNullOrEmpty(sessionId))
+                    return Ok(new { hasChanges = false });
+
+                var state = SessionExcelManager.GetState(sessionId);
+                // Only run if admin uploaded a file in THIS session
+                if (state == null || !state.HasUploaded || string.IsNullOrEmpty(state.LastFileHash))
+                    return Ok(new { hasChanges = false });
+
+                // Resolve path dynamically (watches repo root for the uploaded file name, falling back to local persistent copy)
+                var localPath = ResolveSourcePathForSession(state);
+                if (string.IsNullOrEmpty(localPath) || !System.IO.File.Exists(localPath))
+                    return Ok(new { hasChanges = false });
+
+                var currentHash = SessionExcelManager.ComputeFileHash(localPath);
+                if (string.IsNullOrEmpty(currentHash))
+                    return Ok(new { hasChanges = false });
+
+                // No change — hashes match
+                if (currentHash == state.LastFileHash)
+                    return Ok(new { hasChanges = false });
+
+                // Hash changed — file was saved/edited by admin after upload
+                var parsedRows = SeedHelper.ParseInterviewFile(localPath);
+                var newInterviews = new List<Interview>();
+                var syncTime = DateTime.UtcNow;
+                foreach (var parsed in parsedRows)
+                {
+                    try
+                    {
+                        var incoming = SeedHelper.MapParsedRow(parsed);
+                        if (!string.IsNullOrWhiteSpace(incoming.IntervieweeName))
+                        {
+                            incoming.InterviewCode = InterviewCodeHelper.BuildCode(incoming);
+                            incoming.Status = InterviewCodeHelper.NormalizeStatus(incoming.Status, incoming.InterviewType);
+                            incoming.LastSyncedAt = syncTime;
+                            incoming.CreatedAt = syncTime;
+                            incoming.UpdatedAt = syncTime;
+                            newInterviews.Add(incoming);
+                        }
+                    }
+                    catch { /* skip bad rows */ }
+                }
+
+                var diff = SessionExcelManager.GenerateDiff(state.Interviews, newInterviews);
+
+                // Always update in-memory state to latest file
+                state.Interviews = newInterviews;
+                state.LastFileHash = currentHash;
+
+                if (diff.HasChanges)
+                {
+                    return Ok(new
+                    {
+                        hasChanges = true,
+                        inserted = diff.Inserted.Select(i => new { i.Sr, i.IntervieweeName, i.CompanyName, i.Status, i.InterviewDate, i.JobHunterName }),
+                        deleted  = diff.Deleted.Select(i  => new { i.Sr, i.IntervieweeName, i.CompanyName, i.Status, i.InterviewDate, i.JobHunterName }),
+                        updated  = diff.Updated,
+                        fileName = state.UploadedFileName ?? Path.GetFileName(localPath)
+                    });
+                }
+
+                return Ok(new { hasChanges = false });
+            }
+            catch (Exception ex)
+            {
+                // Suppress background errors — never crash the poller
+                return Ok(new { hasChanges = false, error = ex.Message });
             }
         }
 
@@ -476,12 +734,18 @@ namespace RizvizERP.API.Controllers
                 var headers = new List<string>();
                 var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                var samples = _context.Interviews
-                    .Where(i => i.RawRowJson != null && i.RawRowJson != "")
-                    .OrderByDescending(i => i.UpdatedAt)
-                    .Take(50)
-                    .Select(i => i.RawRowJson)
-                    .ToList();
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
+                var state = SessionExcelManager.GetState(sessionId);
+
+                var samples = (state != null && state.HasUploaded)
+                    ? state.Interviews
+                        .Where(i => i.RawRowJson != null && i.RawRowJson != "")
+                        .OrderByDescending(i => i.UpdatedAt)
+                        .Take(50)
+                        .Select(i => i.RawRowJson)
+                        .ToList()
+                    : new List<string>();
 
                 foreach (var json in samples)
                 {
@@ -1059,6 +1323,39 @@ namespace RizvizERP.API.Controllers
             var interview = _context.Interviews.Find(id);
             if (interview == null) return NotFound(new { message = "Interview not found" });
             return Ok(interview);
+        }
+
+        private string ResolvePersistentPath(string fileName)
+        {
+            return Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+        }
+
+        private string ResolveSourcePath()
+        {
+            var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            if (System.IO.File.Exists(lastUploadedPath))
+                return lastUploadedPath;
+
+            return null;
+        }
+
+        private string ResolveSourcePathForSession(SessionExcelState state)
+        {
+            if (state == null || string.IsNullOrEmpty(state.UploadedFileName))
+                return null;
+
+            // 1. Try to find the file in the repo root (useful for local development auto-sync of uploaded file)
+            var repoRoot = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), ".."));
+            var repoRootPath = Path.Combine(repoRoot, state.UploadedFileName);
+            if (System.IO.File.Exists(repoRootPath))
+                return repoRootPath;
+
+            // 2. Fall back to the persistent copy in the current directory
+            var localPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            if (System.IO.File.Exists(localPath))
+                return localPath;
+
+            return null;
         }
     }
 }

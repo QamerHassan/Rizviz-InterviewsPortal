@@ -114,9 +114,8 @@ namespace RizvizERP.API
                 services.AddDbContext<ApplicationDbContext>(options =>
                     options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
-                // Auto-sync background poller is always registered — it uses file-timestamp
-                // comparison to skip polling cycles when Excel hasn't changed.
-                services.AddHostedService<InterviewSyncBackgroundService>();
+                // Auto-sync background poller is disabled as file comes only via browser upload.
+                // services.AddHostedService<InterviewSyncBackgroundService>();
 
                 // Register Database-backed Services as Scoped
                 services.AddScoped<DatabaseServices>();
@@ -142,6 +141,10 @@ namespace RizvizERP.API
 
             // ── Startup sync: Google Sheets → DB (runs every restart) ─────────
             services.AddHostedService<FeedbackSyncService>();
+
+            // ── Excel file watcher: detects disk-level changes to last_uploaded_excel.xlsx ──
+            services.AddSingleton<ExcelFileWatcherService>();
+            services.AddHostedService(sp => sp.GetRequiredService<ExcelFileWatcherService>());
 
             services.AddControllers()
                 .AddJsonOptions(options =>

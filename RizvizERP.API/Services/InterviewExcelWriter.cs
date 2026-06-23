@@ -9,16 +9,25 @@ namespace RizvizERP.API.Services
 {
     public static class InterviewExcelWriter
     {
+        private static string GetExcelFilePath()
+        {
+            var lastUploadedPath = Path.Combine(
+                Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+            
+            if (File.Exists(lastUploadedPath))
+                return lastUploadedPath;
+            
+            return null;  // No file uploaded yet — return null, show empty state
+        }
+
         public static void UpdateRowAndLog(Interview existing, Interview updated, string username)
         {
             try
             {
-                string excelPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "Interview Software.xlsx");
-                if (!File.Exists(excelPath))
+                string excelPath = GetExcelFilePath();
+                if (string.IsNullOrEmpty(excelPath) || !File.Exists(excelPath))
                 {
-                    // Maybe try another name
-                    excelPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "Interview Software - Copy.xlsx");
-                    if (!File.Exists(excelPath)) return;
+                    return;
                 }
 
                 // Detect changes
