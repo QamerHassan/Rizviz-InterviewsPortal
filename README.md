@@ -33,7 +33,7 @@ Rizviz ERP is a **production-ready, mobile-responsive** recruitment portal desig
 | Module | Capability |
 |---|---|
 | 🗂 **Interviews** | Full CRUD, Excel sync, status tracking, smart filters, grid/list view |
-| 📅 **Calendar** | Monthly interview calendar with chip-based event visualization |
+| 📅 **Google-Style Calendar** | Complete Google Calendar workflow — Day, Multi-Day, Week & Month views, multi-timezone switcher, developer availability, trash & restore, and mobile app flow |
 | 🤖 **AI Feedback** | Voice recording → Urdu/English transcription → AI enhancement via Groq |
 | 👥 **Candidates** | Candidate profiles linked to interview history and status drawers |
 | 📊 **Dashboard** | Live KPI cards, Recharts bar/line/pie charts, dark & light mode |
@@ -42,6 +42,54 @@ Rizviz ERP is a **production-ready, mobile-responsive** recruitment portal desig
 | 📤 **Google Sheets Sync** | Bidirectional sync — feedback auto-appended to Google Sheet on save |
 | 👤 **User Management** | Admin role with first-login setup flow and branch/company switching |
 | 📱 **Mobile Responsive** | Full mobile optimization — touch-friendly drawers, swipe-scroll tables, responsive modals |
+
+---
+
+## ✦ Google Calendar Experience & Functionality
+
+The portal features a **Google Calendar-inspired interface** crafted for enterprise interview scheduling:
+
+### 1. Flexible Multi-View Engine
+- **1 Day View**: Detailed 24-hour vertical timeline (12 AM – 11 PM) with interactive time slots, red current-time marker, and event card details.
+- **Multi-Day Views (2, 3, 4, 5 Days)**: Side-by-side comparison across custom day ranges for team scheduling.
+- **Week View (7 Days)**: Full Sunday-to-Saturday schedule grid showing all-day banners and timed interview slots.
+- **Month View**: Complete monthly grid with color-coded event chips, developer availability badges, and compact indicators.
+
+### 2. Google Calendar Mobile App Flow
+- **100% Viewport Month View**: All 7 days (`Sun` to `Sat`) fit within the phone screen width with zero cutoff or horizontal scrolling.
+- **Tap-to-Day Navigation**: Tapping any day cell in Month View instantly opens that day's **1-Day Timeline View** (mirroring Google Calendar mobile app behavior).
+- **Mobile Header View Switcher**: A dedicated view selector dropdown (`[Week ▾]`, `[1 Day ▾]`, `[Month ▾]`) placed right next to `Today` button, always visible and never cut off.
+- **Slide-in Google Calendar Drawer (☰)**:
+  - Quick **Calendar View** 2×2 button grid (`1 Day`, `3 Days`, `Week`, `Month`).
+  - Interactive mini-month calendar picker with date jump.
+  - Real-time candidate & tech stack filters.
+  - One-tap "Add Interview" and "Check Availability" actions.
+
+### 3. Global Timezone Intelligence
+- **One-Click Timezone Switcher**: Instantly re-render schedules across international recruiter and client timezones:
+  - 🇺🇸 **EST** (US Eastern · New York)
+  - 🇺🇸 **CST** (US Central · Chicago)
+  - 🇺🇸 **PST** (US Pacific · San Francisco)
+  - 🇵🇰 **PKT** (Pakistan Standard Time)
+  - 🌐 **Local Browser Time**
+- Dual timezone column display option for cross-border interview alignment.
+
+### 4. Developer Availability & Scheduling
+- Visual availability blocks highlighting candidate and developer free slots vs. emergency leaves and off-hours.
+- Conflict detection preventing double bookings.
+- Real-time updates broadcast via Microsoft SignalR.
+
+### 5. Google Workspace Settings & Utility Suite
+- **Trash & Soft-Delete**: Deleted interviews are preserved in a Google-style **Trash Bin** with one-click restore.
+- **Print & Export**: Print visual calendar grids or clean text agendas with customizable orientation (Landscape / Portrait).
+- **Appearance & Density**: Switch between Comfortable and Compact view densities, customize accent colors, and toggle recruiter avatars.
+- **Keyboard Shortcuts**: Power-user shortcuts:
+  - `T` — Jump to Today
+  - `1` – `6` — Switch to 1–6 Days View
+  - `W` — Week View (7 Days)
+  - `M` — Month View
+  - `/` — Focus interview search
+  - `Esc` — Close active modal/drawer
 
 ---
 
@@ -164,13 +212,15 @@ And in `RizvizERP.API/appsettings.json`:
 
 ## ✦ Mobile Responsiveness
 
-The portal is fully optimized for mobile devices:
+The portal is fully optimized for mobile devices with an app-like experience:
 
-- 📱 Drawers use `Math.min(width, 100vw)` — full-screen on phones
-- 🗓 Calendar grid wraps in a horizontal scroll container (`minWidth: 560px`)
-- 📊 Status card strip is swipe-scrollable on narrow viewports
-- 🔲 All modals capped at `95vw` on small screens
-- 📝 Multi-column forms collapse to single column below `sm` breakpoint
+- 🗓 **Google Calendar Mobile Flow**: Month view fits all 7 days 100% across the viewport (no horizontal scroll or cutoff); tapping any date navigates directly to the 1-Day timeline.
+- 🎛 **Persistent View Switcher**: Header view dropdown (`1 Day`, `Week`, `Month`) and timezone indicator stay clearly visible and unclipped on narrow screens (360px+).
+- ☰ **Slide-in Calendar Menu**: Mobile drawer includes quick Google Calendar-style view buttons (`1 Day`, `3 Days`, `Week`, `Month`), mini date picker, and filters.
+- 📱 **Full-Screen Drawers**: Drawers dynamically expand to full screen (`100vw`) on phones for comfortable viewing and editing.
+- 📊 **Touch-Friendly Controls**: Status cards, filters, and tables support horizontal swipe-scrolling on compact viewports.
+- 🔲 **Adaptive Modals**: All modals and confirmation dialogs adapt with a responsive `95vw` cap.
+- 📝 **Responsive Forms**: Multi-column form layouts automatically stack to a single column below the `sm` breakpoint.
 
 ---
 
