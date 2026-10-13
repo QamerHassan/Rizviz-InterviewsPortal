@@ -17,9 +17,17 @@ namespace RizvizERP.API.Services
         public string LastFileHash { get; set; }
         public bool HasUploaded { get; set; }
         public DateTime? UploadedAt { get; set; }
+        /// <summary>
+        /// The actual date FROM the file content (FileKey sheet or workbook Modified property).
+        /// Unlike UploadedAt (which is always "now"), this reflects when the file was last saved.
+        /// Used for the today-only data gate — only today's file data is served.
+        /// </summary>
+        public DateTime? UploadedFileDate { get; set; }
         public string UploadedFileName { get; set; }
         public string TempUploadedFileName { get; set; }
         public string TempFilePath { get; set; }
+        public bool IsBypassed { get; set; }
+        public DateTime? TempUploadedFileDate { get; set; }
     }
 
     public class ExcelDiffDto

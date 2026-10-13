@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -223,36 +224,47 @@ namespace RizvizERP.API.Services
                 _context.SaveChanges();
 
                 // Detect deletes by SR: if SR exists in DB snapshot but not in Excel, remove it.
+                // SAFETY GUARD: Do NOT perform mass deletions if uploading a file with only partial rows (unless replaceAll is true).
                 var deletedRows = new List<Interview>();
-                if (!doReplaceAll)
+                if (!doReplaceAll && seenSrInExcel.Count > 0)
                 {
-                    deletedRows = existingRows
+                    var potentialDeletes = existingRows
                         .Where(r => r.Sr.HasValue && r.Sr.Value > 0 && !seenSrInExcel.Contains(r.Sr.Value))
                         .ToList();
 
-                    if (deletedRows.Count > 0)
+                    // Only auto-delete missing SRs if it's a small change (<= 20% of dataset or <= 10 rows).
+                    // If a smaller/daily file is uploaded with missing historical rows, preserve existing DB rows!
+                    if (potentialDeletes.Count <= 10 || potentialDeletes.Count <= existingRows.Count * 0.2)
                     {
-                        _context.Interviews.RemoveRange(deletedRows);
-                        _context.SaveChanges();
-
-                        foreach (var row in deletedRows)
+                        deletedRows = potentialDeletes;
+                        if (deletedRows.Count > 0)
                         {
-                            if (result.Changes.Count < 100)
+                            _context.Interviews.RemoveRange(deletedRows);
+                            _context.SaveChanges();
+
+                            foreach (var row in deletedRows)
                             {
-                                var oldRow = InterviewChangeHelper.SnapshotRow(row);
-                                result.Changes.Add(new InterviewSyncChangeDto
+                                if (result.Changes.Count < 100)
                                 {
-                                    Sr = row.Sr,
-                                    IntervieweeName = row.IntervieweeName,
-                                    CompanyName = row.CompanyName,
-                                    ChangeType = "Deleted",
-                                    Summary = $"[Deleted] Removed from Excel (SR: {row.Sr})",
-                                    OldRow = oldRow,
-                                    NewRow = new Dictionary<string, string>(),
-                                    RowFields = InterviewChangeHelper.BuildRowFields(oldRow, new Dictionary<string, string>(), new List<string> { $"Deleted row SR: {row.Sr}" })
-                                });
+                                    var oldRow = InterviewChangeHelper.SnapshotRow(row);
+                                    result.Changes.Add(new InterviewSyncChangeDto
+                                    {
+                                        Sr = row.Sr,
+                                        IntervieweeName = row.IntervieweeName,
+                                        CompanyName = row.CompanyName,
+                                        ChangeType = "Deleted",
+                                        Summary = $"[Deleted] Removed from Excel (SR: {row.Sr})",
+                                        OldRow = oldRow,
+                                        NewRow = new Dictionary<string, string>(),
+                                        RowFields = InterviewChangeHelper.BuildRowFields(oldRow, new Dictionary<string, string>(), new List<string> { $"Deleted row SR: {row.Sr}" })
+                                    });
+                                }
                             }
                         }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("[SyncFromExcel] Skipped automatic deletion of {Count} missing SRs because upload appears to be a partial/daily file (safety guard).", potentialDeletes.Count);
                     }
                 }
 
@@ -273,6 +285,44 @@ namespace RizvizERP.API.Services
                 }
                 if (insertedCodes.Count > 0)
                     _context.SaveChanges();
+
+                // Synchronize in-memory active sessions and watcher baseline
+                try
+                {
+                    var allInterviewsList = _context.Interviews.ToList();
+                    var fileHash = "";
+                    if (File.Exists(sourcePath))
+                    {
+                        using (var md5 = System.Security.Cryptography.MD5.Create())
+                        using (var stream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            var hashBytes = md5.ComputeHash(stream);
+                            fileHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                        }
+                    }
+
+                    // Update watcher baseline to prevent duplicate change events
+                    ExcelFileWatcherService.SetBaseline(fileHash, allInterviewsList);
+
+                    // Update all active sessions
+                    var sessionsField = typeof(SessionExcelManager)
+                        .GetField("_sessions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    if (sessionsField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<string, SessionExcelState> sessions)
+                    {
+                        foreach (var session in sessions.Values)
+                        {
+                            if (session.HasUploaded)
+                            {
+                                session.Interviews = allInterviewsList;
+                                session.LastFileHash = fileHash;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[SyncFromExcel] Failed to update SessionExcelManager or ExcelFileWatcherService baseline.");
+                }
 
                 bool isFirstSync = !_lastKnownModifiedTime.HasValue;
                 bool isAutoSyncFirstRun = string.Equals(changedBy, "AutoSync", StringComparison.OrdinalIgnoreCase) && isFirstSync;
@@ -537,9 +587,44 @@ namespace RizvizERP.API.Services
             var ext = Path.GetExtension(sourcePath);
             if (string.IsNullOrEmpty(ext)) ext = ".xlsx";
             var tempPath = Path.Combine(Path.GetTempPath(), $"rizviz-interviews-{Guid.NewGuid():N}{ext}");
+
+            const int maxAttempts = 10;
+            for (int i = 1; i <= maxAttempts; i++)
+            {
+                try
+                {
+                    using (var src = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        if (src.Length > 100)
+                        {
+                            // Verify ZIP format first
+                            using (var zip = new System.IO.Compression.ZipArchive(src, System.IO.Compression.ZipArchiveMode.Read, true))
+                            {
+                                if (zip.Entries.Count > 0)
+                                {
+                                    using (var dst = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                                    {
+                                        src.Position = 0; // reset stream position
+                                        src.CopyTo(dst);
+                                    }
+                                    return tempPath;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception) when (i < maxAttempts)
+                {
+                    // Ignore and wait for file lock release or zip writing completion
+                }
+                Thread.Sleep(500);
+            }
+
             using (var src = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             using (var dst = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
                 src.CopyTo(dst);
+            }
             return tempPath;
         }
 

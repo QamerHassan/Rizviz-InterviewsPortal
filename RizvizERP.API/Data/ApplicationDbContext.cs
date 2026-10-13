@@ -46,6 +46,9 @@ namespace RizvizERP.API.Data
         public DbSet<Lead> Leads { get; set; }
         public DbSet<InterviewFeedback> InterviewFeedbacks { get; set; }
         public DbSet<GeneralFeedback> GeneralFeedbacks { get; set; }
+        public DbSet<FileTracking> FileTrackings { get; set; }
+        public DbSet<DeveloperAvailability> DeveloperAvailabilities { get; set; }
+        public DbSet<ScheduleRequest> ScheduleRequests { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

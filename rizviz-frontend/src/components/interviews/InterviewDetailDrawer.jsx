@@ -167,8 +167,8 @@ const InterviewDetailDrawer = ({ interview, open, onClose, candidateName }) => {
         <div className="space-y-1">
           <InfoRow label="Company" value={companyName} isDarkMode={isDarkMode} />
           <InfoRow label="Job Profile" value={interviewFor} isDarkMode={isDarkMode} />
-          <InfoRow label="Candidate" value={interview.IntervieweeName} isDarkMode={isDarkMode} />
-          <InfoRow label="Job Hunter" value={interview.JobHunterName} isDarkMode={isDarkMode} />
+          <InfoRow label="Developer (Interviewee)" value={interview.IntervieweeName} isDarkMode={isDarkMode} />
+          <InfoRow label="BD / Added By" value={interview.JobHunterName} isDarkMode={isDarkMode} />
           {relatedLead && (
             <>
               <InfoRow label="Lead Status" value={relatedLead.Status} isDarkMode={isDarkMode} />
@@ -197,6 +197,9 @@ const InterviewDetailDrawer = ({ interview, open, onClose, candidateName }) => {
         <div className="space-y-1">
           <InfoRow label="Sr" value={`#${interview.Sr ?? '—'}`} isDarkMode={isDarkMode} />
           <InfoRow label="Job Profile" value={interviewFor} isDarkMode={isDarkMode} />
+          <InfoRow label="Developer (Interviewee)" value={interview.IntervieweeName} isDarkMode={isDarkMode} />
+          <InfoRow label="BD / Added By" value={interview.JobHunterName} isDarkMode={isDarkMode} />
+          <InfoRow label="Interview Date" value={formatDate(interview.InterviewDate)} isDarkMode={isDarkMode} />
           <InfoRow label="Job Start" value={formatDate(interview.JobStartDate)} isDarkMode={isDarkMode} />
           <InfoRow label="Job Close" value={formatDate(interview.JobCloseDate)} isDarkMode={isDarkMode} />
           <InfoRow label="Status" value={status} isDarkMode={isDarkMode} />

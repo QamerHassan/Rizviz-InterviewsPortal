@@ -71,4 +71,27 @@ namespace RizvizERP.API.DTOs
         public DateTime ChangedAt { get; set; }
         public string ChangeSummary { get; set; }
     }
+
+    public class InterviewPatchDto
+    {
+        public int? Sr { get; set; }
+        public string InvTo { get; set; }
+        public DateTime? InterviewDate { get; set; }
+        public string InterviewFor { get; set; }
+        public string IntervieweeName { get; set; }
+        public string JobHunterName { get; set; }
+        public string CompanyName { get; set; }
+        public string InterviewType { get; set; }
+        public DateTime? JobStartDate { get; set; }
+        public DateTime? JobCloseDate { get; set; }
+        public string FirstSalary { get; set; }
+        public string JhSuggest { get; set; }
+        public decimal? InterviewCharges { get; set; }
+        public decimal? JhDue { get; set; }
+        public decimal? FirstPaymentOnJob { get; set; }
+        public decimal? SecondPaymentOnJob { get; set; }
+        public decimal? BalancePayable { get; set; }
+        public string Status { get; set; }
+        public string Stack { get; set; }
+    }
 }

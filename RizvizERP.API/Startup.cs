@@ -132,7 +132,15 @@ namespace RizvizERP.API
             services.AddScoped<ISyncInterviewDataService, SyncInterviewDataService>();
             services.AddSignalR();
             services.AddScoped<NotificationService>();
+            services.AddScoped<IEmailService, EmailService>();
             services.AddHttpClient(); // For FeedbackController → OpenAI Whisper/GPT
+
+            // ── FileKey daily file-key system (in-memory, MockServices pattern) ─────
+            services.AddSingleton<FileKeyService>();
+
+            // ── ArchiveService for automatic archiving of past interviews ──────────
+            services.AddSingleton<ArchiveService>();
+
 
             // ── General Feedback (DB + Google Sheets) ─────────────────────────
             services.AddScoped<RizvizERP.API.Repositories.IGeneralFeedbackRepository,
@@ -142,9 +150,14 @@ namespace RizvizERP.API
             // ── Startup sync: Google Sheets → DB (runs every restart) ─────────
             services.AddHostedService<FeedbackSyncService>();
 
-            // ── Excel file watcher: detects disk-level changes to last_uploaded_excel.xlsx ──
-            services.AddSingleton<ExcelFileWatcherService>();
-            services.AddHostedService(sp => sp.GetRequiredService<ExcelFileWatcherService>());
+            // ── Watch SQL Server mkt.interview_detail for real-time PowerBuilder changes ──
+            services.AddHostedService<DatabaseInterviewWatcherService>();
+
+            // Excel background services disabled in live SQL database mode
+            // services.AddSingleton<ExcelFileWatcherService>();
+            // services.AddHostedService(sp => sp.GetRequiredService<ExcelFileWatcherService>());
+            // services.AddHostedService<InterviewSyncBackgroundService>();
+
 
             services.AddControllers()
                 .AddJsonOptions(options =>
@@ -265,6 +278,18 @@ namespace RizvizERP.API
                 using var serviceScope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope();
                 var context = serviceScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
+                // Run archive service once on startup to clean up past-date interviews
+                try
+                {
+                    var archiveService = serviceScope.ServiceProvider.GetRequiredService<ArchiveService>();
+                    archiveService.ArchivePastInterviews();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ArchiveStartup] Initial archiving failed: {ex.Message}");
+                }
+
+
                 if (context.Database.IsInMemory())
                 {
                     context.Database.EnsureCreated();
@@ -362,6 +387,158 @@ namespace RizvizERP.API
                         UPDATE [dbo].[interview_feedback] SET status='Passed',    inv_to='Silmun', interview_for='Abbas Zaidi'  WHERE sr=5755 AND status IS NULL;
                     ";
                     context.Database.ExecuteSqlRaw(alterFeedbackSql);
+
+                    // Create Rizviz_FileTracking table
+                    var fileTrackingTableSql = @"
+                        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_FileTracking]') AND type in (N'U'))
+                        BEGIN
+                            CREATE TABLE [dbo].[Rizviz_FileTracking] (
+                                [id]                 INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                                [file_name]          NVARCHAR(255) NULL,
+                                [last_uploaded_hash] NVARCHAR(100) NULL,
+                                [last_uploaded_at]   DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                                [last_uploaded_by]   NVARCHAR(100) NULL
+                            );
+                        END
+                    ";
+                    context.Database.ExecuteSqlRaw(fileTrackingTableSql);
+
+                    // ── Ensure Rizviz_InterviewHistory table exists (created by AddLeadsTable
+                    //    migration, but may be absent if migrations ran only partially) ──────
+                    var interviewHistoryTableSql = @"
+                        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_InterviewHistory]') AND type in (N'U'))
+                        BEGIN
+                            CREATE TABLE [dbo].[Rizviz_InterviewHistory] (
+                                [Id]              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                                [InterviewId]     INT NOT NULL,
+                                [InterviewCode]   NVARCHAR(100) NULL,
+                                [OldStatus]       NVARCHAR(50) NULL,
+                                [NewStatus]       NVARCHAR(50) NULL,
+                                [OldRecruiter]    NVARCHAR(100) NULL,
+                                [NewRecruiter]    NVARCHAR(100) NULL,
+                                [OldInterviewDate] DATE NULL,
+                                [NewInterviewDate] DATE NULL,
+                                [ChangedBy]       NVARCHAR(100) NULL,
+                                [ChangedAt]       DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                                [ChangeSummary]   NVARCHAR(MAX) NULL
+                            );
+                        END
+                    ";
+                    context.Database.ExecuteSqlRaw(interviewHistoryTableSql);
+
+                    // ── Ensure Rizviz_InterviewSyncLog table exists ────────────────────────
+                    var interviewSyncLogTableSql = @"
+                        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_InterviewSyncLog]') AND type in (N'U'))
+                        BEGIN
+                            CREATE TABLE [dbo].[Rizviz_InterviewSyncLog] (
+                                [Id]           INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                                [SyncedAt]     DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                                [TotalRows]    INT NOT NULL DEFAULT 0,
+                                [InsertedRows] INT NOT NULL DEFAULT 0,
+                                [UpdatedRows]  INT NOT NULL DEFAULT 0,
+                                [UnchangedRows] INT NOT NULL DEFAULT 0,
+                                [FailedRows]   INT NOT NULL DEFAULT 0,
+                                [SourcePath]   NVARCHAR(500) NULL,
+                                [Message]      NVARCHAR(MAX) NULL,
+                                [ErrorMessage] NVARCHAR(MAX) NULL
+                            );
+                        END
+                    ";
+                    context.Database.ExecuteSqlRaw(interviewSyncLogTableSql);
+
+                    // ── Ensure Rizviz_DeveloperAvailability table exists ──────────────────
+                    var devAvailSql = @"
+                        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_DeveloperAvailability]') AND type in (N'U'))
+                        BEGIN
+                            CREATE TABLE [dbo].[Rizviz_DeveloperAvailability] (
+                                [id]                 INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                                [candidate_name]     NVARCHAR(150) NOT NULL,
+                                [availability_date]  DATE NOT NULL,
+                                [status]             NVARCHAR(50) NOT NULL DEFAULT 'Unavailable',
+                                [reason_type]        NVARCHAR(100) NULL,
+                                [timezone]           NVARCHAR(50) NULL DEFAULT 'PKT (UTC+5)',
+                                [start_time]         NVARCHAR(20) NULL,
+                                [end_time]           NVARCHAR(20) NULL,
+                                [notes]              NVARCHAR(500) NULL,
+                                [created_by]         NVARCHAR(100) NULL,
+                                [created_at]         DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                                [updated_at]         DATETIME2 NULL
+                            );
+                            CREATE INDEX [IX_Rizviz_DevAvail_Date] ON [dbo].[Rizviz_DeveloperAvailability] ([availability_date], [candidate_name]);
+                        END
+                        ELSE
+                        BEGIN
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_DeveloperAvailability]') AND name = 'timezone')
+                            BEGIN
+                                ALTER TABLE [dbo].[Rizviz_DeveloperAvailability] ADD [timezone] NVARCHAR(50) NULL DEFAULT 'PKT (UTC+5)';
+                            END
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_DeveloperAvailability]') AND name = 'start_time')
+                            BEGIN
+                                ALTER TABLE [dbo].[Rizviz_DeveloperAvailability] ADD [start_time] NVARCHAR(20) NULL;
+                            END
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_DeveloperAvailability]') AND name = 'end_time')
+                            BEGIN
+                                ALTER TABLE [dbo].[Rizviz_DeveloperAvailability] ADD [end_time] NVARCHAR(20) NULL;
+                            END
+                        END
+
+                        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Rizviz_ScheduleRequests]') AND type in (N'U'))
+                        BEGIN
+                            CREATE TABLE [dbo].[Rizviz_ScheduleRequests] (
+                                [id]                 INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                                [candidate_name]     NVARCHAR(150) NOT NULL,
+                                [company_name]       NVARCHAR(150) NOT NULL,
+                                [requested_date]     DATE NOT NULL,
+                                [time_slot]          NVARCHAR(100) NULL,
+                                [timezone]           NVARCHAR(50) NULL DEFAULT 'PKT (UTC+5)',
+                                [interview_type]     NVARCHAR(100) NULL,
+                                [meeting_link]       NVARCHAR(500) NULL,
+                                [status]             NVARCHAR(50) NOT NULL DEFAULT 'Pending',
+                                [notes]              NVARCHAR(1000) NULL,
+                                [requested_by]       NVARCHAR(100) NULL,
+                                [rejection_reason]   NVARCHAR(500) NULL,
+                                [interview_id]       INT NULL,
+                                [created_at]         DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                                [responded_at]       DATETIME2 NULL
+                            );
+                            CREATE INDEX [IX_Rizviz_SchedReq_Candidate] ON [dbo].[Rizviz_ScheduleRequests] ([candidate_name], [status]);
+                        END
+                    ";
+                    context.Database.ExecuteSqlRaw(devAvailSql);
+
+                    // Seed initial file tracking if the Excel file exists on disk but tracking table is empty
+                    try
+                    {
+                        if (!context.FileTrackings.Any())
+                        {
+                            var lastUploadedPath = Path.Combine(Directory.GetCurrentDirectory(), "last_uploaded_excel.xlsx");
+                            if (File.Exists(lastUploadedPath))
+                            {
+                                string hash;
+                                using (var sha256 = System.Security.Cryptography.SHA256.Create())
+                                using (var stream = File.OpenRead(lastUploadedPath))
+                                {
+                                    var hashBytes = sha256.ComputeHash(stream);
+                                    hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                                }
+
+                                var baselineTracking = new Models.FileTracking
+                                {
+                                    FileName = "last_uploaded_excel.xlsx",
+                                    LastUploadedHash = hash,
+                                    LastUploadedAt = File.GetLastWriteTimeUtc(lastUploadedPath),
+                                    LastUploadedBy = "System (Startup Baseline)"
+                                };
+                                context.FileTrackings.Add(baselineTracking);
+                                context.SaveChanges();
+                                Console.WriteLine($"[FileTracking] Seeded startup baseline for last_uploaded_excel.xlsx with hash {hash}");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[FileTracking] Startup baseline seeding failed: {ex.Message}");
+                    }
                 }
 
                 if (!context.Database.CanConnect())

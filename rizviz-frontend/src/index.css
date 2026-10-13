@@ -544,48 +544,214 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.25);
 }
 
+
+
+/* ── File Changed re-upload banner slide-in animation ────────────────────── */
+@keyframes fileChangedSlideIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 /* ============================================================
-   RESPONSIVE GLOBAL FIXES
+   GLOBAL RESPONSIVE FOUNDATION
    ============================================================ */
 
 html, body, #root {
   overflow-x: hidden;
   max-width: 100vw;
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* Touch-friendly tap targets */
+.ant-btn, .ant-menu-item, .ant-pagination-item {
+  min-height: 44px !important;
+}
+
+/* Tables — always horizontally scrollable */
 .ant-table-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-
 .ant-table {
   min-width: 600px;
 }
 
-@media (max-width: 767px) {
-  .ant-form-item { margin-bottom: 12px; }
-  .ant-form-item-label { padding-bottom: 4px !important; }
-  .responsive-actions { flex-direction: column !important; align-items: stretch !important; gap: 8px !important; }
-  .ant-select { width: 100% !important; }
-  .ant-card-body { padding: 12px !important; }
-  .ant-tabs-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  h1.ant-typography, .ant-typography h1 { font-size: 22px !important; }
-  h2.ant-typography, .ant-typography h2 { font-size: 18px !important; }
-  h3.ant-typography, .ant-typography h3 { font-size: 16px !important; }
-  .ant-modal { max-width: calc(100vw - 24px) !important; margin: 12px auto !important; }
-  .ant-statistic-title { font-size: 12px !important; }
-  .ant-statistic-content { font-size: 22px !important; }
-}
-
-
+/* Charts */
 .recharts-responsive-container { min-width: 0 !important; }
 
+/* Layout */
 .ant-layout { min-width: 0; }
 .ant-layout-content { min-width: 0; }
 
+/* Drawer body reset */
 .ant-drawer-body { padding: 0 !important; }
 
-/* Interviews portal table */
+/* Space wrapping */
+.ant-space { flex-wrap: wrap; }
+
+/* ============================================================
+   DARK MODE — ENHANCED POLISH
+   ============================================================ */
+
+/* Descriptions (notification detail modal) */
+html.dark .ant-descriptions-bordered .ant-descriptions-item-label {
+  background: #1c1942 !important;
+  color: #94a3b8 !important;
+  border-color: #2d2a5e !important;
+}
+html.dark .ant-descriptions-bordered .ant-descriptions-item-content {
+  background: #12102e !important;
+  color: #e2e8f0 !important;
+  border-color: #2d2a5e !important;
+}
+html.dark .ant-descriptions-bordered {
+  border-color: #2d2a5e !important;
+}
+
+/* Popover (notifications panel) */
+html.dark .ant-popover-content {
+  background: #1e293b !important;
+}
+html.dark .ant-popover-inner {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
+}
+html.dark .ant-popover-title {
+  color: #e2e8f0 !important;
+  border-bottom-color: #334155 !important;
+}
+html.dark .ant-popover-arrow::before,
+html.dark .ant-popover-arrow::after {
+  background: #1e293b !important;
+}
+
+/* Notification items inside popover */
+html.dark .ant-list-item {
+  border-bottom-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+html.dark .ant-list-item:hover {
+  background: rgba(79, 70, 229, 0.08) !important;
+}
+html.dark .ant-badge-count {
+  box-shadow: 0 0 0 2px #1e293b !important;
+}
+
+/* Stat cards dark mode */
+html.dark .custom-stat-card {
+  background: #12102e !important;
+  border: 1px solid #1c1942 !important;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5) !important;
+}
+html.dark .custom-stat-card:hover {
+  border-color: #3730a3 !important;
+  box-shadow: 0 20px 40px -15px rgba(79, 70, 229, 0.25) !important;
+}
+
+/* Buttons dark mode */
+html.dark .ant-btn-default {
+  background: #1c1942 !important;
+  border-color: #3730a3 !important;
+  color: #c4b5fd !important;
+}
+html.dark .ant-btn-default:hover {
+  background: #1e1b4b !important;
+  border-color: #6366f1 !important;
+  color: #a5b4fc !important;
+}
+
+/* Notification toast dark mode */
+html.dark .ant-notification-notice {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+}
+html.dark .ant-notification-notice-message {
+  color: #e2e8f0 !important;
+}
+html.dark .ant-notification-notice-description {
+  color: #94a3b8 !important;
+}
+html.dark .ant-notification-notice-close {
+  color: #64748b !important;
+}
+
+/* Checkbox dark */
+html.dark .ant-checkbox-wrapper {
+  color: #cbd5e1 !important;
+}
+html.dark .ant-checkbox-inner {
+  background: #1c1942 !important;
+  border-color: #4f46e5 !important;
+}
+
+/* Radio dark */
+html.dark .ant-radio-wrapper {
+  color: #cbd5e1 !important;
+}
+html.dark .ant-radio-button-wrapper {
+  background: #1c1942 !important;
+  border-color: #3730a3 !important;
+  color: #94a3b8 !important;
+}
+html.dark .ant-radio-button-wrapper:hover {
+  color: #a5b4fc !important;
+}
+
+/* Tooltip dark */
+html.dark .ant-tooltip-inner {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #e2e8f0 !important;
+}
+html.dark .ant-tooltip-arrow::before {
+  background: #1e293b !important;
+}
+
+/* Switch dark */
+html.dark .ant-switch {
+  background: #334155 !important;
+}
+html.dark .ant-switch-checked {
+  background: #4f46e5 !important;
+}
+
+/* Collapse dark */
+html.dark .ant-collapse {
+  background: #12102e !important;
+  border-color: #1c1942 !important;
+}
+html.dark .ant-collapse-header {
+  color: #e2e8f0 !important;
+}
+html.dark .ant-collapse-content {
+  background: #12102e !important;
+  border-top-color: #1c1942 !important;
+  color: #cbd5e1 !important;
+}
+
+/* Alert dark */
+html.dark .ant-alert {
+  background: #1c1942 !important;
+  border-color: #3730a3 !important;
+}
+html.dark .ant-alert-message {
+  color: #e2e8f0 !important;
+}
+
+/* Message dark (toast alerts) */
+html.dark .ant-message-notice-content {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4) !important;
+}
+
+/* ============================================================
+   INTERVIEWS PORTAL TABLE STYLES
+   ============================================================ */
+
 .interviews-portal-table .ant-table-thead > tr > th {
   background: #f8fafc !important;
   font-size: 11px !important;
@@ -596,47 +762,80 @@ html, body, #root {
   border-bottom: 1px solid #e2e8f0 !important;
   padding: 12px 14px !important;
 }
-
 .interviews-portal-table .ant-table-tbody > tr > td {
   padding: 14px !important;
   font-size: 13px !important;
   border-bottom: 1px solid #f1f5f9 !important;
 }
-
 .interviews-portal-table .ant-table-tbody > tr.interviews-row-alt > td {
   background: #f0f9ff !important;
 }
-
 .interviews-portal-table .ant-table-tbody > tr:hover > td {
   background: #e0f2fe !important;
 }
 
-.dark .interviews-portal-table .ant-table-thead > tr > th {
+html.dark .interviews-portal-table .ant-table-thead > tr > th {
   background: #1e293b !important;
   color: #94a3b8 !important;
   border-bottom-color: #334155 !important;
 }
-
-.dark .interviews-portal-table .ant-table-tbody > tr > td {
+html.dark .interviews-portal-table .ant-table-tbody > tr > td {
   border-bottom-color: #334155 !important;
 }
-
-.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-alt > td {
+html.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-alt > td {
   background: rgba(30, 58, 138, 0.15) !important;
 }
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-editing > td {
+  background: #ede9fe !important;
+  border-top: 1.5px solid #7c3aed !important;
+  border-bottom: 1.5px solid #7c3aed !important;
+}
+html.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-editing > td {
+  background: rgba(109, 40, 217, 0.18) !important;
+  border-top: 1.5px solid #7c3aed !important;
+  border-bottom: 1.5px solid #7c3aed !important;
+}
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-editing td .ant-form-item {
+  margin-bottom: 0 !important;
+}
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-editing td .ant-input,
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-editing td .ant-input-number,
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-editing td .ant-picker,
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-editing td .ant-select-selector {
+  font-size: 12px !important;
+}
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-archived > td {
+  background: #f5f3ff !important;
+  color: #6d28d9 !important;
+  opacity: 0.88;
+}
+.interviews-portal-table .ant-table-tbody > tr.interviews-row-archived:hover > td {
+  background: #ede9fe !important;
+  opacity: 1;
+}
+html.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-archived > td {
+  background: rgba(109, 40, 217, 0.1) !important;
+  color: #c4b5fd !important;
+  opacity: 0.9;
+}
+html.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-archived:hover > td {
+  background: rgba(109, 40, 217, 0.18) !important;
+  opacity: 1;
+}
 
+/* Filter bar */
 .interviews-filter-bar {
   background: #fff;
   border: 1px solid #f1f5f9;
   border-radius: 12px;
   padding: 12px 16px;
 }
-
-.dark .interviews-filter-bar {
+html.dark .interviews-filter-bar {
   background: #1e293b;
   border-color: #334155;
 }
 
+/* Status pills */
 .interviews-status-pill {
   display: inline-flex;
   align-items: center;
@@ -646,21 +845,28 @@ html, body, #root {
   font-weight: 600;
   border: 1px solid transparent;
 }
+.interviews-status-pill:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+.interview-status-pills-scroll,
+.interview-status-stat-scroll {
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.interview-status-pills-scroll::-webkit-scrollbar,
+.interview-status-stat-scroll::-webkit-scrollbar { height: 6px; }
 
+/* View toggle */
 .interviews-view-toggle .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
   background: #4f46e5 !important;
   border-color: #4f46e5 !important;
   color: #fff !important;
 }
-
 .interviews-view-toggle .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)::before {
   background-color: #4f46e5 !important;
 }
-
-.interviews-view-toggle .ant-radio-button-wrapper:hover {
-  color: #4f46e5;
-}
-
+.interviews-view-toggle .ant-radio-button-wrapper:hover { color: #4f46e5; }
 html.dark .interviews-view-toggle .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
   background: #4f46e5 !important;
   border-color: #4f46e5 !important;
@@ -668,69 +874,15 @@ html.dark .interviews-view-toggle .ant-radio-button-wrapper-checked:not(.ant-rad
 html.dark .interviews-view-toggle .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)::before {
   background-color: #4f46e5 !important;
 }
-html.dark .interviews-view-toggle .ant-radio-button-wrapper:hover {
-  color: #a5b4fc;
-}
+html.dark .interviews-view-toggle .ant-radio-button-wrapper:hover { color: #a5b4fc; }
 
-.interviews-portal-table .ant-table-tbody > tr.interviews-row-changed-today > td {
-  /* Clean background */
-}
-
-.interviews-sync-row-changed td {
-  /* Clean background */
-}
-
-.interview-status-pills-scroll,
-.interview-status-stat-scroll {
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-
-.interview-status-pills-scroll::-webkit-scrollbar,
-.interview-status-stat-scroll::-webkit-scrollbar {
-  height: 6px;
-}
-
-.interview-status-pill:focus-visible {
-  outline: 2px solid #4f46e5;
-  outline-offset: 2px;
-}
-
-.interviews-portal-table .ant-table-tbody > tr.interviews-row-cancelled > td {
-  /* Clean background */
-}
-
-.interviews-portal-table .ant-table-tbody > tr.interviews-row-postponed > td {
-  /* Clean background */
-}
-
-.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-changed-today > td {
-  /* Clean background */
-}
-
-.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-cancelled > td {
-  /* Clean background */
-}
-
-.dark .interviews-portal-table .ant-table-tbody > tr.interviews-row-postponed > td {
-  /* Clean background */
-}
-
-/* Interview calendar */
-.interview-calendar-chip:hover {
-  filter: brightness(0.96);
-}
-
-.dark .interview-calendar-chip:hover {
-  filter: brightness(1.15);
-}
-
+/* Calendar */
+.interview-calendar-chip:hover { filter: brightness(0.96); }
+html.dark .interview-calendar-chip:hover { filter: brightness(1.15); }
 .interview-calendar-cell:last-child,
-.interview-calendar-grid .grid-cols-7 > div:nth-child(7n) {
-  border-right: none;
-}
+.interview-calendar-grid .grid-cols-7 > div:nth-child(7n) { border-right: none; }
 
-/* Sidebar menu item height and padding reduction to prevent scrolling */
+/* Sidebar menu */
 .ant-menu-inline .ant-menu-item {
   height: 48px !important;
   line-height: 48px !important;
@@ -743,68 +895,155 @@ html.dark .interviews-view-toggle .ant-radio-button-wrapper:hover {
   font-size: 14px !important;
   font-weight: 600 !important;
 }
-.ant-menu-inline .ant-menu-item .anticon {
-  font-size: 17px !important;
-}
+.ant-menu-inline .ant-menu-item .anticon { font-size: 17px !important; }
 
-/* ─── Global Mobile Responsiveness ──────────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ============================================================
+   MOBILE — max-width: 767px
+   ============================================================ */
+@media (max-width: 767px) {
 
-  /* Ant Modal: prevent overflow, ensure padding */
+  /* Body safe area for notched phones */
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Top Navbar */
+  .ant-layout-header {
+    padding: 0 10px !important;
+    height: 56px !important;
+    line-height: 56px !important;
+  }
+
+  /* Cards */
+  .ant-card-body { padding: 12px !important; }
+  .ant-card { border-radius: 16px !important; }
+
+  /* Stat cards */
+  .custom-stat-card { padding: 14px 12px !important; border-radius: 16px !important; }
+  .stat-icon-box { width: 36px !important; height: 36px !important; font-size: 15px !important; }
+
+  /* Modals — full-width on mobile */
   .ant-modal {
-    max-width: calc(100vw - 24px) !important;
-    margin: 12px auto !important;
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    padding: 0 !important;
   }
-  .ant-modal-content {
-    border-radius: 16px !important;
-  }
-  .ant-modal-body {
-    max-height: 80vh;
-    overflow-y: auto;
+  .ant-modal-content { border-radius: 16px !important; padding: 16px !important; }
+  .ant-modal-body { max-height: 75vh; overflow-y: auto; padding: 0 !important; }
+  .ant-modal-header { padding: 0 0 12px 0 !important; margin-bottom: 12px !important; }
+  .ant-modal-footer { padding: 12px 0 0 0 !important; margin-top: 12px !important; }
+
+  /* Descriptions table in modal */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
   }
 
-  /* Tables: horizontal scroll */
-  .ant-table-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  /* Notification popover — nearly full screen */
+  .ant-popover {
+    max-width: calc(100vw - 16px) !important;
+    left: 8px !important;
+    right: 8px !important;
   }
+  .ant-popover-inner { border-radius: 16px !important; }
 
-  /* Space and Row gutter tightening */
-  .ant-space {
-    flex-wrap: wrap;
+  /* Forms */
+  .ant-form-item { margin-bottom: 12px; }
+  .ant-form-item-label { padding-bottom: 4px !important; }
+  .ant-form-item-label > label { font-size: 13px !important; }
+  .ant-select, .ant-picker, .ant-input, .ant-input-number { width: 100% !important; }
+
+  /* Filter bar */
+  .responsive-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
   }
+  .white-search-input { width: 100% !important; }
+  .interviews-filter-bar { padding: 10px 12px; }
 
-  /* Pagination: wrap on mobile */
+  /* Typography */
+  h1.ant-typography, .ant-typography h1 { font-size: 20px !important; }
+  h2.ant-typography, .ant-typography h2 { font-size: 17px !important; }
+  h3.ant-typography, .ant-typography h3 { font-size: 15px !important; }
+  .ant-statistic-title { font-size: 11px !important; }
+  .ant-statistic-content { font-size: 20px !important; }
+  .ant-statistic-content-value { font-size: 20px !important; }
+
+  /* Tabs */
+  .ant-tabs-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ant-tabs-nav-list { overflow-x: auto; }
+  .ant-tabs-tab { padding: 8px 10px !important; font-size: 13px !important; }
+
+  /* Pagination */
   .ant-pagination {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 4px;
   }
+  .ant-pagination-item { min-width: 32px !important; height: 32px !important; line-height: 30px !important; }
 
-  /* Page title sizing */
-  .ant-typography h2,
-  h2.ant-typography {
-    font-size: 22px !important;
-  }
+  /* Tables */
+  .ant-table-thead > tr > th { font-size: 11px !important; padding: 8px !important; }
+  .ant-table-tbody > tr > td { font-size: 12px !important; padding: 8px !important; }
 
-  /* Reduce top navbar height impact */
-  .ant-layout-header {
-    padding: 0 12px !important;
-  }
+  /* Buttons */
+  .ant-btn { font-size: 13px !important; padding: 0 12px !important; }
 
-  /* Interviews filter bar */
-  .white-search-input {
-    width: 100% !important;
-  }
+  /* Interview calendar on mobile */
+  .interview-calendar-grid { font-size: 10px; }
+  .interview-calendar-chip { font-size: 9px !important; padding: 1px 4px !important; }
 
-  /* Form items full width */
-  .ant-form-item {
-    margin-bottom: 12px;
-  }
-
-  /* Tabs scroll on mobile */
-  .ant-tabs-nav-list {
+  /* Status pills scroll */
+  .interview-status-pills-scroll {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  /* Space components */
+  .ant-space { gap: 8px !important; }
+}
+
+/* ============================================================
+   TABLET — 768px to 1023px
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ant-card-body { padding: 16px !important; }
+  .ant-modal {
+    max-width: calc(100vw - 40px) !important;
+    margin: 20px auto !important;
+  }
+  .ant-layout-header { padding: 0 16px !important; }
+  h1.ant-typography, .ant-typography h1 { font-size: 24px !important; }
+  h2.ant-typography, .ant-typography h2 { font-size: 20px !important; }
+}
+
+/* ============================================================
+   DARK MODE — MOBILE SPECIFIC
+   ============================================================ */
+@media (max-width: 767px) {
+  html.dark .ant-modal-content {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+  }
+  html.dark .ant-drawer-content-wrapper {
+    box-shadow: 4px 0 20px rgba(0,0,0,0.6) !important;
+  }
+  html.dark .ant-popover-inner {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
   }
 }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0.02); }
+::-webkit-scrollbar-thumb { background: rgba(79, 70, 229, 0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(79, 70, 229, 0.25); }
+html.dark ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+

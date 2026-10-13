@@ -22,10 +22,21 @@ namespace RizvizERP.API.Controllers
 
         private User GetCurrentUser()
         {
-            var authHeader = Request.Headers["Authorization"].ToString();
-            var username = AuthHelper.GetUsernameFromToken(authHeader);
-            if (string.IsNullOrEmpty(username)) return null;
-            return AuthHelper.GetUserByUsername(username);
+            try
+            {
+                var authHeader = Request.Headers["Authorization"].ToString();
+                var username = AuthHelper.GetUsernameFromToken(authHeader);
+                if (!string.IsNullOrEmpty(username))
+                {
+                    var user = AuthHelper.GetUserByUsername(username);
+                    if (user != null) return user;
+                    var dbUser = _context.Users.AsNoTracking().FirstOrDefault(u => u.Username == username);
+                    if (dbUser != null) return dbUser;
+                    return new User { Username = username, RoleName = "User" };
+                }
+            }
+            catch {}
+            return new User { Username = "User", RoleName = "User" };
         }
 
         private bool CanEdit(User user)
@@ -38,29 +49,84 @@ namespace RizvizERP.API.Controllers
                    string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase);
         }
 
-        private IQueryable<Interview> GetUserInterviewsQuery(User user)
+        private IQueryable<Interview> GetUserInterviewsQuery(User user, string intervieweeParam = null)
         {
+            if (user == null)
+                return new List<Interview>().AsQueryable().Where(i => false);
+
             var authHeader = Request.Headers["Authorization"].ToString();
             var sessionId = AuthHelper.GetSessionIdFromToken(authHeader);
             var state = SessionExcelManager.GetState(sessionId);
-            var query = (state != null && state.HasUploaded) ? state.Interviews.AsQueryable() : new List<Interview>().AsQueryable();
 
-            if (user == null)
-                return query.Where(i => false);
+            bool isStale = state != null
+                && state.HasUploaded
+                && !state.IsBypassed
+                && state.UploadedFileDate.HasValue
+                && state.UploadedFileDate.Value.Date != DateTime.Today;
 
-            if (string.Equals(user.RoleName, "Admin", StringComparison.OrdinalIgnoreCase))
-                return query;
+            bool hasActiveSession = state != null && state.HasUploaded && !isStale;
 
-            if (string.Equals(user.RoleName, "Interviewee", StringComparison.OrdinalIgnoreCase))
-                return query.Where(i => i.IntervieweeName == user.InterviewName);
+            IQueryable<Interview> query;
+            if (hasActiveSession && state.Interviews.Count > 0)
+            {
+                query = state.Interviews.AsQueryable();
+            }
+            else
+            {
+                query = _context.Interviews.AsNoTracking();
+            }
 
-            if (string.Equals(user.RoleName, "Job Hunter", StringComparison.OrdinalIgnoreCase))
-                return query.Where(i => i.JobHunterName == user.InterviewName);
+            bool isAdmin = string.Equals(user.RoleName, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(user.RoleName, "HR", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(user.RoleName, "Manager", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(user.RoleName, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
 
-            if (string.Equals(user.RoleName, "Both", StringComparison.OrdinalIgnoreCase))
-                return query.Where(i => i.IntervieweeName == user.InterviewName || i.JobHunterName == user.InterviewName);
+            if (!isAdmin)
+            {
+                // Regular users only see their own interviews
+                var interviewName = user.InterviewName?.Trim();
+                var fullName = user.FullName?.Trim();
+                var username = user.Username?.Trim();
+                var role = user.RoleName?.Trim();
 
-            // Default to HR/Manager/Employee -> see all interviews
+                if (string.Equals(role, "Interviewee", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(role, "Developer", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(role, "Candidate", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(i =>
+                        (!string.IsNullOrEmpty(interviewName) && i.IntervieweeName == interviewName) ||
+                        (!string.IsNullOrEmpty(fullName) && i.IntervieweeName == fullName) ||
+                        (!string.IsNullOrEmpty(username) && i.IntervieweeName == username));
+                }
+                else if (string.Equals(role, "Job Hunter", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(role, "BD", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(i =>
+                        (!string.IsNullOrEmpty(interviewName) && (i.JobHunterName == interviewName || i.InvTo == interviewName)) ||
+                        (!string.IsNullOrEmpty(fullName) && (i.JobHunterName == fullName || i.InvTo == fullName)) ||
+                        (!string.IsNullOrEmpty(username) && (i.JobHunterName == username || i.InvTo == username)));
+                }
+                else if (string.Equals(role, "Both", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(i =>
+                        (!string.IsNullOrEmpty(interviewName) && (i.IntervieweeName == interviewName || i.JobHunterName == interviewName || i.InvTo == interviewName)) ||
+                        (!string.IsNullOrEmpty(fullName) && (i.IntervieweeName == fullName || i.JobHunterName == fullName || i.InvTo == fullName)) ||
+                        (!string.IsNullOrEmpty(username) && (i.IntervieweeName == username || i.JobHunterName == username || i.InvTo == username)));
+                }
+                else
+                {
+                    query = query.Where(i =>
+                        (!string.IsNullOrEmpty(interviewName) && (i.IntervieweeName == interviewName || i.JobHunterName == interviewName || i.InvTo == interviewName)) ||
+                        (!string.IsNullOrEmpty(fullName) && (i.IntervieweeName == fullName || i.JobHunterName == fullName || i.InvTo == fullName)) ||
+                        (!string.IsNullOrEmpty(username) && (i.IntervieweeName == username || i.JobHunterName == username || i.InvTo == username)));
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(intervieweeParam) && !string.Equals(intervieweeParam, "All", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(i => i.IntervieweeName == intervieweeParam || (i.IntervieweeName != null && i.IntervieweeName.Contains(intervieweeParam)));
+            }
+
             return query;
         }
 
@@ -77,8 +143,26 @@ namespace RizvizERP.API.Controllers
                 if (user == null)
                     return Unauthorized(new { message = "Unauthenticated" });
 
-                var interviews = GetUserInterviewsQuery(user).ToList();
+                var interviews = GetUserInterviewsQuery(user, interviewee).ToList();
                 var dbLeads = _context.Leads.AsNoTracking().ToList();
+
+                bool isAdmin = string.Equals(user.RoleName, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(user.RoleName, "HR", StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(user.RoleName, "Manager", StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(user.RoleName, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+
+                if (!isAdmin)
+                {
+                    var interviewName = user.InterviewName?.Trim();
+                    var fullName = user.FullName?.Trim();
+                    var username = user.Username?.Trim();
+
+                    dbLeads = dbLeads.Where(l =>
+                        (!string.IsNullOrEmpty(interviewName) && string.Equals(l.Entertains?.Trim(), interviewName, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(fullName) && string.Equals(l.Entertains?.Trim(), fullName, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(username) && string.Equals(l.Entertains?.Trim(), username, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
 
                 var derivedLeads = new List<LeadDto>();
                 
@@ -106,7 +190,7 @@ namespace RizvizERP.API.Controllers
                     var dbOverride = dbLeads.FirstOrDefault(l => !l.IsManual && string.Equals(l.CompanyName?.Trim(), companyName, StringComparison.OrdinalIgnoreCase) && string.Equals(l.Entertains?.Trim(), iv, StringComparison.OrdinalIgnoreCase));
 
                     string leadStatus = dbOverride?.Status ?? latestInterview.Status ?? "Scheduled";
-                    bool isConverted = string.Equals(leadStatus, "converted", StringComparison.OrdinalIgnoreCase);
+                    bool isConverted = string.Equals(leadStatus, "converted", StringComparison.OrdinalIgnoreCase) || string.Equals(leadStatus, "hired", StringComparison.OrdinalIgnoreCase);
                     bool hasRejectedInterview = group.Any(i => string.Equals(i.Status, "rejected", StringComparison.OrdinalIgnoreCase));
                     bool hasDroppedInterview = group.Any(i => string.Equals(i.Status, "dropped", StringComparison.OrdinalIgnoreCase));
 
@@ -153,7 +237,7 @@ namespace RizvizERP.API.Controllers
 
                 // Stats
                 int totalLeads = derivedLeads.Count;
-                int leadsConverted = derivedLeads.Count(l => l.IsConverted || string.Equals(l.Status, "converted", StringComparison.OrdinalIgnoreCase));
+                int leadsConverted = derivedLeads.Count(l => l.IsConverted || string.Equals(l.Status, "converted", StringComparison.OrdinalIgnoreCase) || string.Equals(l.Status, "hired", StringComparison.OrdinalIgnoreCase));
                 int rejectedCount = derivedLeads.Count(l => l.HasRejected || string.Equals(l.Status, "rejected", StringComparison.OrdinalIgnoreCase));
                 int droppedCount = derivedLeads.Count(l => l.HasDropped || string.Equals(l.Status, "dropped", StringComparison.OrdinalIgnoreCase));
                 int closedCount = derivedLeads.Count(l => string.Equals(l.Status, "closed", StringComparison.OrdinalIgnoreCase));

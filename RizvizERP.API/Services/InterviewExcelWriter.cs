@@ -63,6 +63,40 @@ namespace RizvizERP.API.Services
 
                 // Open workbook and update the main data sheet
                 using var wb = new XLWorkbook(excelPath);
+
+                // ── FileKey sheet (additive — never overwrites existing data) ──────
+                try
+                {
+                    var fileKeySvc    = new FileKeyService();
+                    var todayRecord   = fileKeySvc.GetOrCreateToday();
+
+                    var fkSheet = wb.Worksheets.FirstOrDefault(
+                        w => w.Name.Equals("FileKey", StringComparison.OrdinalIgnoreCase));
+
+                    if (fkSheet == null)
+                    {
+                        fkSheet = wb.Worksheets.Add("FileKey");
+                        fkSheet.Cell("A1").Value = "File Key";
+                        fkSheet.Cell("B1").Value = todayRecord.FileKey;
+                        fkSheet.Cell("A2").Value = "Generated Date";
+                        fkSheet.Cell("B2").Value = todayRecord.FileDate.ToString("yyyy-MM-dd");
+                        fkSheet.Cell("A3").Value = "Week Number";
+                        fkSheet.Cell("B3").Value = todayRecord.WeekNumber;
+                        fkSheet.Cell("A4").Value = "Day Code";
+                        fkSheet.Cell("B4").Value = todayRecord.DayCode;
+                        fkSheet.Range("A1:A4").Style.Font.Bold = true;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Weekend — FileKey sheet is not created (expected behaviour)
+                }
+                catch (Exception fkEx)
+                {
+                    Console.WriteLine($"[InterviewExcelWriter] FileKey sheet skipped: {fkEx.Message}");
+                }
+                // ── End FileKey sheet ─────────────────────────────────────────────
+
                 var ws = wb.Worksheets.FirstOrDefault(w => w.Name.Contains("Interview") || w.Name.Contains("data")) ?? wb.Worksheets.First();
                 
                 // Find the row by SR
@@ -126,6 +160,34 @@ namespace RizvizERP.API.Services
                                 if (h == "second payment on job") targetRow.Cell(c).Value = updated.SecondPaymentOnJob;
                                 if (h == "balance payable") targetRow.Cell(c).Value = updated.BalancePayable;
                             }
+
+                            // ── Creation Date column (ADDITIVE — never overwrite) ─────────────────
+                            // Find the "Creation Date" column. If it doesn't exist, append it.
+                            int creationDateColIndex = -1;
+                            int lastUsedCol = 1;
+                            for (int c = 1; c <= 50; c++)
+                            {
+                                var h = headerRow.Cell(c).GetString()?.ToLower().Trim() ?? "";
+                                if (!string.IsNullOrWhiteSpace(h)) lastUsedCol = c;
+                                if (h == "creation date") { creationDateColIndex = c; break; }
+                            }
+
+                            if (creationDateColIndex < 0)
+                            {
+                                // Column doesn't exist yet — add it after the last used column
+                                creationDateColIndex = lastUsedCol + 1;
+                                headerRow.Cell(creationDateColIndex).Value = "Creation Date";
+                                headerRow.Cell(creationDateColIndex).Style.Font.Bold = true;
+                            }
+
+                            // Only stamp if the cell is currently empty — NEVER overwrite an existing date
+                            var creationDateCell = targetRow.Cell(creationDateColIndex);
+                            if (string.IsNullOrWhiteSpace(creationDateCell.GetString()))
+                            {
+                                creationDateCell.Value = DateTime.Now.ToString("yyyy-MM-dd");
+                                creationDateCell.Style.NumberFormat.Format = "@"; // store as text
+                            }
+                            // ── End Creation Date column ──────────────────────────────────────────
                         }
                     }
                 }
@@ -137,6 +199,48 @@ namespace RizvizERP.API.Services
                 Console.WriteLine($"[InterviewExcelWriter] Error writing back to Excel: {ex.Message}");
             }
         }
+
+        public static void DeleteRowFromExcel(int? sr, string username = "User")
+        {
+            if (!sr.HasValue) return;
+            try
+            {
+                string excelPath = GetExcelFilePath();
+                if (string.IsNullOrEmpty(excelPath) || !File.Exists(excelPath))
+                    return;
+
+                using var wb = new XLWorkbook(excelPath);
+                var ws = wb.Worksheets.FirstOrDefault(w => w.Name.Contains("Interview") || w.Name.Contains("data")) ?? wb.Worksheets.First();
+                
+                var headerRow = ws.RowsUsed().FirstOrDefault(r => string.Join("", r.CellsUsed().Select(c => c.GetString())).Contains("INTERVIEWEE"));
+                int srColIndex = -1;
+                if (headerRow != null)
+                {
+                    for (int c = 1; c <= 50; c++)
+                    {
+                        var headerVal = headerRow.Cell(c).GetString()?.ToLower().Trim() ?? "";
+                        if (headerVal == "sr." || headerVal == "sr") { srColIndex = c; break; }
+                    }
+                }
+
+                if (srColIndex > 0)
+                {
+                    var targetRow = ws.RowsUsed().Skip(1).FirstOrDefault(r =>
+                        int.TryParse(r.Cell(srColIndex).GetString(), out int cellSr) && cellSr == sr.Value);
+                    if (targetRow != null)
+                    {
+                        targetRow.Delete();
+                        LogChangeToExcel(excelPath, sr, username, "Row_Status", "Active", "DELETED");
+                        wb.Save();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[InterviewExcelWriter] Error deleting row from Excel: {ex.Message}");
+            }
+        }
+
 
         private static void LogChangeToExcel(string excelPath, int? sr, string username, string field, string oldVal, string newVal)
         {

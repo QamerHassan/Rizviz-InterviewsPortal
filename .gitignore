@@ -52,3 +52,14 @@ test-enhance.ps1
 test_notification_arez.js
 RizvizERP.API/appsettings.json
 RizvizERP.API/appsettings.Development.json
+RizvizERP.API/connection.ini
+
+# ── Local scratch and backup dumps ───────────────────────────────────
+scratch/
+backup*
+*.bak
+__pycache__/
+*.pyc
+restart_api.bat
+rizviz-frontend/truncate_calendar.ps1
+docs/admin-manual/test_continuous.*

@@ -86,15 +86,15 @@ const Login = () => {
 
   return (
     <Layout style={{
-      height: '100vh',
+      minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       background: isDarkMode
         ? 'linear-gradient(135deg, #090d16 0%, #0f172a 100%)'
         : 'linear-gradient(135deg, #f5f3ff 0%, #e2e8f0 100%)',
-      padding: '12px',
-      overflow: 'hidden',
+      padding: '24px 12px',
+      overflowY: 'auto',
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div className="text-center mb-1 flex flex-col items-center">

@@ -241,5 +241,155 @@ namespace RizvizERP.API.Services
                 Console.WriteLine($"[NotificationService] Error broadcasting sync complete: {ex.Message}");
             }
         }
+
+        public async Task NotifyFileReuploaded(string excludeConnectionId)
+        {
+            try
+            {
+                var payload = new
+                {
+                    message = "Changes detected in a file. Please re-login.",
+                    timestamp = DateTime.Now
+                };
+
+                if (!string.IsNullOrEmpty(excludeConnectionId))
+                {
+                    await _hubContext.Clients.AllExcept(excludeConnectionId).SendAsync("FileReuploaded", payload);
+                    Console.WriteLine($"[NotificationService] 📤 Broadcasted FileReuploaded to all clients EXCEPT {excludeConnectionId}");
+                }
+                else
+                {
+                    await _hubContext.Clients.All.SendAsync("FileReuploaded", payload);
+                    Console.WriteLine("[NotificationService] 📤 Broadcasted FileReuploaded to ALL clients");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NotificationService] Error broadcasting FileReuploaded: {ex.Message}");
+            }
+        }
+
+        public async Task NotifyScheduleRequestCreated(ScheduleRequest req)
+        {
+            try
+            {
+                var notification = new NotificationModel
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Message = $"🎯 New Interview Request: {req.CompanyName} on {req.RequestedDate:MMM dd, yyyy} ({req.TimeSlot ?? "TBD"}).",
+                    Timestamp = DateTime.UtcNow,
+                    Type = "RequestCreated",
+                    TargetInterviewName = req.CandidateName,
+                    IntervieweeName = req.CandidateName,
+                    CompanyName = req.CompanyName,
+                    ChangedField = "Interview Request",
+                    OldValue = "N/A",
+                    NewValue = "Pending Response"
+                };
+
+                // Send to developer's specific group
+                if (!string.IsNullOrWhiteSpace(req.CandidateName))
+                {
+                    string groupName = req.CandidateName.Trim().ToLowerInvariant();
+                    await _hubContext.Clients.Group(groupName).SendAsync("ReceiveNotification", notification);
+                    Console.WriteLine($"[NotificationService] 📤 Sent RequestCreated to developer '{groupName}'");
+                }
+
+                // Also notify Admins
+                await _hubContext.Clients.Group("Admins").SendAsync("ReceiveNotification", notification);
+                // Also broadcast general event
+                await _hubContext.Clients.All.SendAsync("ScheduleRequestUpdated", new { id = req.Id, status = req.Status, candidate = req.CandidateName, company = req.CompanyName });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NotificationService] Error in NotifyScheduleRequestCreated: {ex.Message}");
+            }
+        }
+
+        public async Task NotifyScheduleRequestResponded(ScheduleRequest req)
+        {
+            try
+            {
+                bool isAccepted = string.Equals(req.Status, "Accepted", StringComparison.OrdinalIgnoreCase);
+                string actionText = isAccepted ? "ACCEPTED" : "REJECTED";
+                string icon = isAccepted ? "✅" : "❌";
+                string type = isAccepted ? "RequestAccepted" : "RequestRejected";
+
+                string msg = isAccepted
+                    ? $"{icon} {req.CandidateName} ACCEPTED the interview request with {req.CompanyName} on {req.RequestedDate:MMM dd, yyyy} ({req.TimeSlot ?? "TBD"})."
+                    : $"{icon} {req.CandidateName} REJECTED the interview request for {req.CompanyName}. Reason: {req.RejectionReason ?? "Unavailable"}";
+
+                var notification = new NotificationModel
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Message = msg,
+                    Timestamp = DateTime.UtcNow,
+                    Type = type,
+                    TargetInterviewName = req.CandidateName,
+                    IntervieweeName = req.CandidateName,
+                    CompanyName = req.CompanyName,
+                    ChangedField = "Request Status",
+                    OldValue = "Pending",
+                    NewValue = req.Status
+                };
+
+                // Notify Admins group
+                await _hubContext.Clients.Group("Admins").SendAsync("ReceiveNotification", notification);
+                Console.WriteLine($"[NotificationService] 📤 Sent {type} to 'Admins' group");
+
+                // Broadcast real-time schedule request updated event
+                await _hubContext.Clients.All.SendAsync("ScheduleRequestUpdated", new { id = req.Id, status = req.Status, candidate = req.CandidateName, company = req.CompanyName, reason = req.RejectionReason });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NotificationService] Error in NotifyScheduleRequestResponded: {ex.Message}");
+            }
+        }
+
+        public async Task NotifyScheduleRequestRescheduled(ScheduleRequest req)
+        {
+            try
+            {
+                var notification = new NotificationModel
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Message = $"📅 Interview Rescheduled: {req.CompanyName} for {req.CandidateName} on {req.RequestedDate:MMM dd, yyyy} ({req.TimeSlot ?? "TBD"}).",
+                    Timestamp = DateTime.UtcNow,
+                    Type = "Rescheduled",
+                    TargetInterviewName = req.CandidateName,
+                    IntervieweeName = req.CandidateName,
+                    CompanyName = req.CompanyName,
+                    ChangedField = "Schedule Date/Time",
+                    OldValue = "Previous Schedule",
+                    NewValue = $"{req.RequestedDate:MMM dd, yyyy} {req.TimeSlot}"
+                };
+
+                // Send to developer's specific group
+                if (!string.IsNullOrWhiteSpace(req.CandidateName))
+                {
+                    string groupName = req.CandidateName.Trim().ToLowerInvariant();
+                    await _hubContext.Clients.Group(groupName).SendAsync("ReceiveNotification", notification);
+                    Console.WriteLine($"[NotificationService] 📤 Sent Rescheduled notification to developer '{groupName}'");
+                }
+
+                // Also notify Admins
+                await _hubContext.Clients.Group("Admins").SendAsync("ReceiveNotification", notification);
+
+                // Broadcast real-time schedule request updated event
+                await _hubContext.Clients.All.SendAsync("ScheduleRequestUpdated", new
+                {
+                    id = req.Id,
+                    status = req.Status,
+                    candidate = req.CandidateName,
+                    company = req.CompanyName,
+                    newDate = req.RequestedDate,
+                    newSlot = req.TimeSlot
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NotificationService] Error in NotifyScheduleRequestRescheduled: {ex.Message}");
+            }
+        }
     }
 }

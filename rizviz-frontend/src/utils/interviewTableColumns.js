@@ -1,7 +1,34 @@
 import { Tag, Tooltip } from 'antd';
+import { ClockCircleOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import InterviewStatusBadge from '../components/interviews/InterviewStatusBadge';
 
 const DATE_HEADER_HINTS = ['date', 'start', 'close'];
+
+export const formatDateTime = (d, timeZone) => {
+  if (d == null || d === '' || String(d).toLowerCase() === '(blank)') return '—';
+  const parsed = dayjs(d);
+  if (!parsed.isValid()) return '—';
+  const hasTime = parsed.hour() !== 0 || parsed.minute() !== 0 || parsed.second() !== 0;
+  const dateStr = parsed.format('MMM D, YYYY');
+  if (!hasTime) {
+    return <span className="font-medium">{dateStr}</span>;
+  }
+  return (
+    <div className="leading-tight">
+      <div className="font-semibold">{dateStr}</div>
+      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+        <ClockCircleOutlined style={{ fontSize: 10, color: '#3b82f6' }} />
+        <span className="font-bold text-slate-700 dark:text-slate-200">{parsed.format('hh:mm A')}</span>
+        {timeZone ? (
+          <Tag color="cyan" className="!text-[9px] !px-1 !py-0 !m-0 !leading-tight font-bold">
+            {timeZone}
+          </Tag>
+        ) : null}
+      </div>
+    </div>
+  );
+};
 
 export const parseRawRowJson = (record) => {
   const raw = record?.RawRowJson ?? record?.rawRowJson;
@@ -35,16 +62,27 @@ const cellRender = (header, formatDate) => (_, record) => {
 };
 
 /** All DB-backed fields when no Excel JSON is stored yet */
- export const buildModelColumns = ({ formatDate, navigate }) => [
+export const buildModelColumns = ({ formatDate, navigate }) => [
   { title: 'Inv To', dataIndex: 'InvTo', key: 'InvTo', width: 90, render: (t) => t || '—' },
   { title: 'Sr', dataIndex: 'Sr', key: 'Sr', width: 70, render: (t) => t ?? '—' },
-  { title: 'Job Hunter', dataIndex: 'JobHunterName', key: 'JobHunterName', width: 130, ellipsis: true, render: (t) => <Tooltip title={t}>{t || '—'}</Tooltip> },
+  {
+    title: 'BD / Added By',
+    dataIndex: 'JobHunterName',
+    key: 'JobHunterName',
+    width: 140,
+    ellipsis: true,
+    render: (t) => (
+      <Tooltip title={`Added by BD: ${t || 'Unassigned'}`}>
+        <span className="font-semibold" style={{ color: '#0284c7' }}>{t || '—'}</span>
+      </Tooltip>
+    ),
+  },
   { title: 'Job Profile', dataIndex: 'InterviewFor', key: 'InterviewFor', width: 150, ellipsis: true, render: (t) => <Tooltip title={t}>{t || '—'}</Tooltip> },
   {
-    title: 'Interviewee',
+    title: 'Developer (Interviewee)',
     dataIndex: 'IntervieweeName',
     key: 'IntervieweeName',
-    width: 130,
+    width: 160,
     render: (t) => (
       <button
         type="button"
@@ -60,7 +98,13 @@ const cellRender = (header, formatDate) => (_, record) => {
   { title: 'Type', dataIndex: 'InterviewType', key: 'InterviewType', width: 100, ellipsis: true, render: (t) => t || '—' },
   { title: 'Status', dataIndex: 'Status', key: 'Status', width: 110, fixed: 'right', render: (s, record) => <InterviewStatusBadge status={s} record={record} /> },
   { title: 'Stack', dataIndex: 'Stack', key: 'Stack', width: 100, render: (t) => t || '—' },
-  { title: 'Interview Date', dataIndex: 'InterviewDate', key: 'InterviewDate', width: 115, render: formatDate },
+  {
+    title: 'Interview Date & Time',
+    dataIndex: 'InterviewDate',
+    key: 'InterviewDate',
+    width: 155,
+    render: (d, record) => formatDateTime(d, record?.TimeZone ?? record?.timeZone),
+  },
   { title: 'Job Start', dataIndex: 'JobStartDate', key: 'JobStartDate', width: 115, render: formatDate },
   { title: 'Job Close', dataIndex: 'JobCloseDate', key: 'JobCloseDate', width: 115, render: formatDate },
   { title: 'First Salary', dataIndex: 'FirstSalary', key: 'FirstSalary', width: 100, render: (t) => t || '—' },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Row, Col, Card, Spin, Typography, Table, Button } from 'antd';
 import {
   UserOutlined, RiseOutlined, InboxOutlined, CalendarOutlined, CheckCircleOutlined, TeamOutlined,
@@ -13,14 +13,13 @@ import StatCard from '../components/StatCard';
 import {
   useGetHrStatsQuery,
   useGetInterviewStatsQuery,
+  useGetInterviewMonthlyTrendQuery,
   useGetInterviewStatusBreakdownQuery,
   useGetInterviewsPagedQuery,
   useGetLeadsQuery,
-  useGetExcelSessionStatusQuery,
 } from '../store/apiSlice';
 import dayjs from 'dayjs';
 import { useSelector } from 'react-redux';
-import ExcelUploadRequired from '../components/ExcelUploadRequired';
 
 const { Title, Text } = Typography;
 
@@ -131,6 +130,7 @@ const PortalDashboard = ({ isDarkMode }) => {
   const nameFilter = interviewName || '';
 
   const { data: myStats } = useGetInterviewStatsQuery();
+  const { data: myTrendData } = useGetInterviewMonthlyTrendQuery();
   const { data: myBreakdown = [] } = useGetInterviewStatusBreakdownQuery(
     nameFilter
       ? (role === 'Job Hunter' || role === 'Both'
@@ -182,14 +182,33 @@ const PortalDashboard = ({ isDarkMode }) => {
     { name: 'Dead', Leads: myLeadsData?.stats?.Dead || 0, Interviews: myBreakdown.find(s => (s.status || '').toLowerCase() === 'dead')?.count || 0 },
   ];
 
-  const trendData = [
-    { month: 'Jan', Leads: Math.round(totalMyLeads * 0.15), Interviews: Math.round(totalMyInterviews * 0.12) },
-    { month: 'Feb', Leads: Math.round(totalMyLeads * 0.18), Interviews: Math.round(totalMyInterviews * 0.15) },
-    { month: 'Mar', Leads: Math.round(totalMyLeads * 0.22), Interviews: Math.round(totalMyInterviews * 0.20) },
-    { month: 'Apr', Leads: Math.round(totalMyLeads * 0.25), Interviews: Math.round(totalMyInterviews * 0.25) },
-    { month: 'May', Leads: Math.round(totalMyLeads * 0.28), Interviews: Math.round(totalMyInterviews * 0.30) },
-    { month: 'Jun', Leads: Math.round(totalMyLeads * 0.35), Interviews: Math.round(totalMyInterviews * 0.35) },
-  ];
+  // Personalized monthly trend for logged-in user from myRecords and myLeadsData
+  const trendData = useMemo(() => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const interviewCounts = {};
+    const leadCounts = {};
+    monthNames.forEach((m) => { interviewCounts[m] = 0; leadCounts[m] = 0; });
+    myRecords.forEach((r) => {
+      const d = r.InterviewDate ?? r.interviewDate ?? r.JobStartDate ?? r.jobStartDate;
+      if (d) {
+        const m = dayjs(d).format('MMM');
+        if (interviewCounts[m] !== undefined) interviewCounts[m] += 1;
+      }
+    });
+    const leadsList = Array.isArray(myLeadsData?.data) ? myLeadsData.data : [];
+    leadsList.forEach((l) => {
+      const d = l.LastActivity ?? l.lastActivity;
+      if (d) {
+        const m = dayjs(d).format('MMM');
+        if (leadCounts[m] !== undefined) leadCounts[m] += 1;
+      }
+    });
+    return monthNames.map((m) => ({
+      month: m,
+      Interviews: interviewCounts[m],
+      Leads: leadCounts[m],
+    }));
+  }, [myRecords, myLeadsData]);
 
   const proportionData = [
     { name: 'Leads', value: totalMyLeads },
@@ -393,22 +412,16 @@ const Dashboard = () => {
   const { data: interviewStats } = useGetInterviewStatsQuery(undefined, {
     skip: isInterviewPortalUser,
   });
-  const { data: statusBreakdown = [] } = useGetInterviewStatusBreakdownQuery({}, {
+  const { data: monthlyTrendData } = useGetInterviewMonthlyTrendQuery(undefined, {
     skip: isInterviewPortalUser,
   });
-
-  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
-    skip: isInterviewPortalUser || role !== 'Admin',
+  const { data: statusBreakdown = [] } = useGetInterviewStatusBreakdownQuery({}, {
+    skip: isInterviewPortalUser,
   });
 
   // Portal users: show personalized dashboard
   if (isInterviewPortalUser) {
     return <PortalDashboard isDarkMode={isDarkMode} />;
-  }
-
-  // Force Admin to upload Excel on first session load
-  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
-    return <ExcelUploadRequired />;
   }
 
   if (isHrLoading && !hrStats) {
@@ -446,14 +459,12 @@ const Dashboard = () => {
     { name: 'Dead', Leads: leadsData?.stats?.Dead || 0, Interviews: statusBreakdown.find(s => (s.status || '').toLowerCase() === 'dead')?.count || 0 },
   ];
 
-  const trendData = [
-    { month: 'Jan', Leads: Math.round(totalLeads * 0.15), Interviews: Math.round(totalInterviews * 0.12) },
-    { month: 'Feb', Leads: Math.round(totalLeads * 0.18), Interviews: Math.round(totalInterviews * 0.15) },
-    { month: 'Mar', Leads: Math.round(totalLeads * 0.22), Interviews: Math.round(totalInterviews * 0.20) },
-    { month: 'Apr', Leads: Math.round(totalLeads * 0.25), Interviews: Math.round(totalInterviews * 0.25) },
-    { month: 'May', Leads: Math.round(totalLeads * 0.28), Interviews: Math.round(totalInterviews * 0.30) },
-    { month: 'Jun', Leads: Math.round(totalLeads * 0.35), Interviews: Math.round(totalInterviews * 0.35) },
-  ];
+  // Real monthly trend from API — shows actual current-year interview counts per month
+  const trendData = (monthlyTrendData?.trend ?? []).map((t) => ({
+    month: t.month,
+    Interviews: t.count,
+    Leads: 0,
+  }));
 
   const proportionData = [
     { name: 'Leads', value: totalLeads },

@@ -52,8 +52,19 @@ namespace RizvizERP.API.Services
                 try
                 {
                     using var scope = _scopeFactory.CreateScope();
-                    var sync = scope.ServiceProvider.GetRequiredService<ISyncInterviewDataService>();
+                    
+                    // Daily archiving of past interviews
+                    try
+                    {
+                        var archiveService = scope.ServiceProvider.GetRequiredService<ArchiveService>();
+                        archiveService.ArchivePastInterviewsDaily();
+                    }
+                    catch (Exception archEx)
+                    {
+                        _logger.LogError(archEx, "[AutoSync] Scheduled archiving failed.");
+                    }
 
+                    var sync = scope.ServiceProvider.GetRequiredService<ISyncInterviewDataService>();
                     var result = sync.SyncFromExcel("AutoSync", replaceAll: false);
 
                     // UnchangedRows == -1 is the sentinel returned when the file timestamp

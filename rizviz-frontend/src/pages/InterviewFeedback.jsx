@@ -14,16 +14,11 @@ import {
   useGetFeedbacksQuery,
   useSaveFeedbackMutation, useDeleteFeedbackMutation,
   useGetFeedbackDropdownsQuery,
-  useGetExcelSessionStatusQuery,
+  useGetInterviewCandidateNamesQuery,
+  useGetInterviewCompanyNamesQuery,
+  useGetInterviewStackNamesQuery,
+  useGetInterviewsPagedQuery,
 } from '../store/apiSlice';
-import ExcelUploadRequired from '../components/ExcelUploadRequired';
-import {
-  interviewers as allInterviewers,
-  interviewees as allInterviewees,
-  companies as allCompanies,
-  statuses as allStatuses,
-  allInterviews
-} from '../data/interviewData';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -43,6 +38,56 @@ const InterviewFeedback = () => {
   const { token, role } = useSelector(state => state.auth);
   const isAdmin = role === 'Admin';
 
+  // ── Live data from DB (replaces static interviewData.js) ─────────────────
+  const { data: candidateNames = [] } = useGetInterviewCandidateNamesQuery();
+  const { data: companyNames = [] } = useGetInterviewCompanyNamesQuery();
+  const { data: liveStackNames = [] } = useGetInterviewStackNamesQuery();
+
+  // Fetch a wide page of interviews to power the Sr dropdown and auto-fill logic.
+  // limit=1000 is generous; for very large datasets the Sr search filters client-side.
+  const { data: pagedForForm } = useGetInterviewsPagedQuery({ page: 1, limit: 1000 });
+  const allInterviews = useMemo(() => {
+    const rows = Array.isArray(pagedForForm?.data) ? pagedForForm.data : [];
+    // Normalise to the shape the form logic expects (mirrors old interviewData.js shape)
+    return rows.map(r => ({
+      id: r.Id,
+      sr: r.Sr,
+      invTo: r.InvTo,
+      date: r.InterviewDate || r.JobStartDate,
+      interviewer: r.InterviewFor,   // job profile / role
+      interviewee: r.IntervieweeName,
+      jobHunter: r.JobHunterName,
+      company: r.CompanyName,
+      type: r.InterviewType,
+      status: r.Status,
+      jobStartDate: r.JobStartDate,
+      jobCloseDate: r.JobCloseDate,
+    }));
+  }, [pagedForForm]);
+
+  // Build unique interviewer list from live data (InterviewFor field = who the interview is with)
+  const allInterviewers = useMemo(() => {
+    const seen = new Set();
+    return allInterviews
+      .map(r => r.interviewer)
+      .filter(v => v && !seen.has(v) && seen.add(v))
+      .sort()
+      .map(v => ({ value: v, label: v }));
+  }, [allInterviews]);
+
+  // Build unique interviewee list from live candidate names
+  const allInterviewees = useMemo(
+    () => candidateNames.map(n => ({ value: n, label: n })),
+    [candidateNames]
+  );
+
+  // Build unique company list from live company names
+  const allCompanies = useMemo(
+    () => companyNames.map(n => ({ value: n, label: n })),
+    [companyNames]
+  );
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Queries & Mutations
   const { data: feedbacks, isLoading, refetch } = useGetFeedbacksQuery({ 
     search: search || undefined, 
@@ -52,9 +97,6 @@ const InterviewFeedback = () => {
   const [saveFeedbackMutation, { isLoading: isSaving }] = useSaveFeedbackMutation();
   const [deleteFeedback] = useDeleteFeedbackMutation();
 
-  const { data: uploadStatus } = useGetExcelSessionStatusQuery(undefined, {
-    skip: role !== 'Admin',
-  });
 
   // Local state for Voice / Text input mode
   const [inputMode, setInputMode] = useState('voice');
@@ -124,9 +166,6 @@ const InterviewFeedback = () => {
     return allInterviewees.filter(i => names.has(i.value));
   }, [selectedInterviewer]);
 
-  if (role === 'Admin' && uploadStatus && !uploadStatus.hasUploaded) {
-    return <ExcelUploadRequired />;
-  }
 
 
   // Table Columns
@@ -525,10 +564,9 @@ const InterviewFeedback = () => {
             optionFilterProp="children"
           >
             <Option value="All">All Stacks</Option>
-            <Option value="AI/ML">AI/ML</Option>
-            <Option value="Snow">Snow</Option>
-            <Option value="Data">Data</Option>
-            <Option value="DevOps">DevOps</Option>
+            {liveStackNames.map((s) => (
+              <Option key={s} value={s}>{s}</Option>
+            ))}
           </Select>
         </div>
       </div>
@@ -635,13 +673,13 @@ const InterviewFeedback = () => {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} sm={12}>
               <Form.Item name="interviewDate" label="Interview Date" rules={[{ required: true }]}>
                 <DatePicker className="w-full" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="interviewType" label="Interview Type" rules={[{ required: true }]}>
                 <Select placeholder="Select Type">
                   <Option value="Technical">Technical</Option>
@@ -653,13 +691,13 @@ const InterviewFeedback = () => {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} sm={12}>
               <Form.Item name="intervieweeName" label="Candidate (Interviewee)" rules={[{ required: true }]}>
                 <Input disabled placeholder="Current User Name" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="companyName" label="Company" rules={[{ required: true }]}>
                 <Select
                   showSearch

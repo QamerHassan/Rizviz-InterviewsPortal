@@ -58,6 +58,8 @@ namespace RizvizERP.API.Data
             modelBuilder.Entity<Candidate>().ToTable("Rizviz_Candidates", "dbo");
             modelBuilder.Entity<PayrollProcess>().ToTable("Rizviz_PayrollProcesses", "dbo");
             modelBuilder.Entity<PayrollDetail>().ToTable("Rizviz_PayrollDetails", "dbo");
+            modelBuilder.Entity<DeveloperAvailability>().ToTable("Rizviz_DeveloperAvailability", "dbo");
+            modelBuilder.Entity<ScheduleRequest>().ToTable("Rizviz_ScheduleRequests", "dbo");
         }
     }
 }

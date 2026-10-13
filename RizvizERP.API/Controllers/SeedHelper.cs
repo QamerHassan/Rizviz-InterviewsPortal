@@ -23,7 +23,7 @@ namespace RizvizERP.API.Controllers
         {
             { "Sr", new[] { "sr.no", "sr no", "sr", "serial no", "srno", "serial" } },
             { "InvTo", new[] { "invoice to", "inv to", "invto" } },
-            { "InterviewDateTime", new[] { "interviewdatetime", "interview date time", "interview date", "date" } },
+            { "InterviewDateTime", new[] { "interviewdatetime", "interview datetime", "interview date time", "interview date", "date" } },
             { "StackName", new[] { "stack name", "stack" } },
             { "InterviewFor", new[] { "interview for", "job profile", "role" } },
             { "IntervieweeName", new[] { "interviewee name", "candidate name", "candidate", "interviewee" } },
@@ -41,7 +41,9 @@ namespace RizvizERP.API.Controllers
             { "JhDue", new[] { "jh due" } },
             { "FirstPaymentOnJob", new[] { "first payment on job", "first payment" } },
             { "SecondPaymentOnJob", new[] { "second payment on job", "second payment" } },
-            { "BalancePayable", new[] { "balance payable", "balance" } }
+            { "BalancePayable", new[] { "balance payable", "balance" } },
+            // System-managed column — written by InterviewExcelWriter, read back during upload
+            { "CreationDate", new[] { "creation date", "creationdate", "created date", "row creation date" } }
         };
 
         public static string NormalizeHeaderForMatching(string h)
@@ -124,6 +126,11 @@ namespace RizvizERP.API.Controllers
         public static bool IsInterviewHeaderRow(IEnumerable<string> cells)
         {
             if (cells == null) return false;
+
+            // Fallback: if any cell contains "Interview" (excluding title banners like "INTERVIEW SHEET"), treat as header row
+            if (cells.Any(c => c != null && c.IndexOf("Interview", StringComparison.OrdinalIgnoreCase) >= 0 && c.IndexOf("SHEET", StringComparison.OrdinalIgnoreCase) == -1))
+                return true;
+
             int matchCount = 0;
             foreach (var cell in cells)
             {
@@ -267,6 +274,18 @@ namespace RizvizERP.API.Controllers
         private static bool IsValidParsedRow(ParsedInterviewRow row)
         {
             var interviewee = GetCanonicalValue(row, "IntervieweeName");
+            if (string.IsNullOrWhiteSpace(interviewee))
+            {
+                var colArr = row.ToColumnArray();
+                if (colArr.Length > 4 && !string.IsNullOrWhiteSpace(colArr[4]))
+                {
+                    interviewee = colArr[4];
+                }
+                else if (colArr.Length > 5 && !string.IsNullOrWhiteSpace(colArr[5]))
+                {
+                    interviewee = colArr[5];
+                }
+            }
             if (string.IsNullOrWhiteSpace(interviewee)) return false;
             if (interviewee.IndexOf("INTERVIEWEE", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 interviewee.IndexOf("CANDIDATE", StringComparison.OrdinalIgnoreCase) >= 0) return false;
@@ -308,7 +327,9 @@ namespace RizvizERP.API.Controllers
                 Stack = DetectStack(parsed),
                 CreatedAt = now,
                 UpdatedAt = now,
-                RawRowJson = JsonSerializer.Serialize(parsed.ByHeader)
+                RawRowJson = JsonSerializer.Serialize(parsed.ByHeader),
+                // Read the "Creation Date" column if it exists in the file
+                ExcelCreationDate = ParseExcelDate(GetCanonicalValue(parsed, "CreationDate"))
             };
 
             if (string.IsNullOrWhiteSpace(interview.IntervieweeName))

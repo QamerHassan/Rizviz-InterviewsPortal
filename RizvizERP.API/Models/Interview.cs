@@ -46,7 +46,7 @@ namespace RizvizERP.API.Models
         [StringLength(100)]
         public string InvTo { get; set; }
 
-        [Column("interview_date", TypeName = "date")]
+        [Column("interview_date")]
         public DateTime? InterviewDate { get; set; }
 
         [Column("interview_for")]
@@ -69,10 +69,10 @@ namespace RizvizERP.API.Models
         [StringLength(100)]
         public string InterviewType { get; set; }
 
-        [Column("job_start_date", TypeName = "date")]
+        [Column("job_start_date")]
         public DateTime? JobStartDate { get; set; }
 
-        [Column("job_close_date", TypeName = "date")]
+        [Column("job_close_date")]
         public DateTime? JobCloseDate { get; set; }
 
         [Column("first_salary")]
@@ -110,6 +110,63 @@ namespace RizvizERP.API.Models
         [StringLength(50)]
         public string Stack { get; set; }
 
+        [Column("direct_self")]
+        [StringLength(50)]
+        public string DirectSelf { get; set; }
+
+        [Column("location")]
+        [StringLength(100)]
+        public string Location { get; set; }
+
+        [Column("staffing_firm")]
+        [StringLength(255)]
+        public string StaffingFirm { get; set; }
+
+        [Column("implementation_partner")]
+        [StringLength(255)]
+        public string ImplementationPartner { get; set; }
+
+        [Column("payscale_val")]
+        public decimal? PayscaleVal { get; set; }
+
+        [Column("payscale_unit")]
+        [StringLength(50)]
+        public string PayscaleUnit { get; set; }
+
+        [Column("recruiter_name")]
+        [StringLength(255)]
+        public string RecruiterName { get; set; }
+
+        [Column("job_reference")]
+        [StringLength(255)]
+        public string JobReference { get; set; }
+
+        [Column("rejection_reason")]
+        [StringLength(255)]
+        public string RejectionReason { get; set; }
+
+        [Column("remarks")]
+        [StringLength(500)]
+        public string Remarks { get; set; }
+
+        [Column("time_zone")]
+        [StringLength(50)]
+        public string TimeZone { get; set; }
+
+        [Column("client_feedback")]
+        public string ClientFeedback { get; set; }
+
+        [Column("meeting_link")]
+        [StringLength(500)]
+        public string MeetingLink { get; set; }
+
+        [Column("lead_name")]
+        [StringLength(255)]
+        public string LeadName { get; set; }
+
+        [NotMapped]
+        public DateTime? JobLandedDate { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -122,5 +179,12 @@ namespace RizvizERP.API.Models
         /// <summary>Full Excel/CSV row as JSON (original column headers preserved).</summary>
         [Column("raw_row_json")]
         public string RawRowJson { get; set; }
+
+        /// <summary>
+        /// The date this row was first written to the Excel file ("Creation Date" column).
+        /// Set on first write, never overwritten. Used as the authoritative file-date signal.
+        /// </summary>
+        [NotMapped]
+        public DateTime? ExcelCreationDate { get; set; }
     }
 }

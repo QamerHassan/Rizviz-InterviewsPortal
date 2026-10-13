@@ -18,6 +18,7 @@ import InventoryList from './pages/InventoryList';
 import ProjectsList from './pages/ProjectsList';
 import InterviewsList from './pages/InterviewsList';
 import Interviews from './pages/Interviews';
+import InterviewAssignment from './pages/InterviewAssignment';
 import InterviewCalendar from './pages/InterviewCalendar';
 import CandidateDetail from './pages/CandidateDetail';
 import Candidates from './pages/Candidates';
@@ -135,6 +136,11 @@ const AppThemeWrapper = () => {
                 </ProtectedRoute>
               } />
               <Route path="interviews" element={<Interviews />} />
+              <Route path="interviews/assign" element={
+                <ProtectedRoute allowedRoles={['Admin']}>
+                  <InterviewAssignment />
+                </ProtectedRoute>
+              } />
               <Route path="interviews/calendar" element={<InterviewCalendar />} />
               <Route path="interviews/candidates/:name" element={<CandidateDetail />} />
               <Route path="interviews/feedback" element={<InterviewFeedback />} />

@@ -51,7 +51,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['Employees', 'Assets', 'Projects', 'Interviews', 'Candidates', 'Jobs', 'Payroll', 'AuditLogs', 'Leads', 'Feedback', 'Users'],
+  tagTypes: ['Employees', 'Assets', 'Projects', 'Interviews', 'Candidates', 'Jobs', 'Payroll', 'AuditLogs', 'Leads', 'Feedback', 'Users', 'DeveloperAvailability', 'ScheduleRequests'],
   endpoints: (builder) => ({
     // Auth endpoints
     login: builder.mutation({
@@ -248,7 +248,12 @@ export const apiSlice = createApi({
 
     // Recruitment endpoints
     getInterviews: builder.query({
-      query: () => '/interviews',
+      query: (params) => {
+        if (!params) return '/interviews?limit=0';
+        const qs = new URLSearchParams(params).toString();
+        return `/interviews${qs ? `?${qs}` : ''}`;
+      },
+      transformResponse: (response) => (Array.isArray(response) ? response : (response?.data || [])),
       providesTags: ['Interviews'],
     }),
     scheduleInterview: builder.mutation({
@@ -332,8 +337,28 @@ export const apiSlice = createApi({
       query: () => '/interviews/stack-names',
       providesTags: ['Interviews'],
     }),
+    getInterviewJobHunterNames: builder.query({
+      query: () => '/interviews/job-hunter-names',
+      providesTags: ['Interviews'],
+    }),
+    getInterviewInvToNames: builder.query({
+      query: () => '/interviews/inv-to-names',
+      providesTags: ['Interviews'],
+    }),
+    getInterviewBdDevNames: builder.query({
+      query: () => '/interviews/bd-dev-names',
+      providesTags: ['Interviews'],
+    }),
     getInterviewStats: builder.query({
-      query: () => '/interviews/stats',
+      query: ({ candidate } = {}) => {
+        const params = [];
+        if (candidate && candidate !== 'All') params.push(`candidate=${encodeURIComponent(candidate)}`);
+        return `/interviews/stats${params.length ? '?' + params.join('&') : ''}`;
+      },
+      providesTags: ['Interviews'],
+    }),
+    getInterviewMonthlyTrend: builder.query({
+      query: () => '/interviews/monthly-trend',
       providesTags: ['Interviews'],
     }),
     getInterviewStatusBreakdown: builder.query({
@@ -394,6 +419,14 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Interviews'],
     }),
+    patchInterview: builder.mutation({
+      query: ({ id, ...patch }) => ({
+        url: `/interviews/${id}`,
+        method: 'PATCH',
+        body: patch,
+      }),
+      invalidatesTags: ['Interviews'],
+    }),
     deleteInterview: builder.mutation({
       query: (id) => ({
         url: `/interviews/${id}`,
@@ -449,11 +482,23 @@ export const apiSlice = createApi({
       query: () => '/excel/session-status',
       providesTags: ['Interviews'],
     }),
+    checkFileStatus: builder.query({
+      query: () => '/interviews/check-file-status',
+      providesTags: ['FileStatus'],
+    }),
     getLastSyncResult: builder.query({
       query: () => '/interviews/last-sync-result',
     }),
+    getInterviewById: builder.query({
+      query: (id) => `/interviews/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Interviews', id }],
+    }),
     getInterviewHistory: builder.query({
       query: (id) => `/interviews/${id}/history`,
+    }),
+    getMktInterviewDetails: builder.query({
+      query: (id) => `/interviews/mkt-details/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Interviews', id: `mkt-${id}` }],
     }),
 
     // Dashboard endpoints
@@ -537,6 +582,108 @@ export const apiSlice = createApi({
     getFeedbackDropdowns: builder.query({
       query: () => '/feedback/dropdowns',
     }),
+
+    // ─── FileKey endpoints ─────────────────────────────────────────────────
+    getFilekeyToday: builder.query({
+      query: () => '/filekey/today',
+    }),
+    getFilekeyAll: builder.query({
+      query: () => '/filekey/all',
+    }),
+    // ─── Archive endpoints ──────────────────────────────────────────────────
+    searchArchive: builder.query({
+      query: ({ date, from, to, filekey, search, company, candidate, page = 1, limit = 50 } = {}) => {
+        const params = [];
+        if (date)      params.push(`date=${encodeURIComponent(date)}`);
+        if (from)      params.push(`from=${encodeURIComponent(from)}`);
+        if (to)        params.push(`to=${encodeURIComponent(to)}`);
+        if (filekey)   params.push(`filekey=${encodeURIComponent(filekey)}`);
+        if (search)    params.push(`search=${encodeURIComponent(search)}`);
+        if (company)   params.push(`company=${encodeURIComponent(company)}`);
+        if (candidate) params.push(`candidate=${encodeURIComponent(candidate)}`);
+        params.push(`page=${page}`);
+        params.push(`limit=${limit}`);
+        return `/archive/search?${params.join('&')}`;
+      },
+    }),
+    getArchiveYears: builder.query({
+      query: () => '/archive/years',
+    }),
+
+    // ─── Developer Availability endpoints ──────────────────────────────────────
+    getDeveloperAvailability: builder.query({
+      query: ({ candidate, from, to, month } = {}) => {
+        const params = [];
+        if (candidate) params.push(`candidate=${encodeURIComponent(candidate)}`);
+        if (from)      params.push(`from=${encodeURIComponent(from)}`);
+        if (to)        params.push(`to=${encodeURIComponent(to)}`);
+        if (month)     params.push(`month=${encodeURIComponent(month)}`);
+        return `/DeveloperAvailability${params.length ? '?' + params.join('&') : ''}`;
+      },
+      providesTags: ['DeveloperAvailability'],
+    }),
+    saveDeveloperAvailability: builder.mutation({
+      query: (body) => ({
+        url: '/DeveloperAvailability',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DeveloperAvailability'],
+    }),
+    deleteDeveloperAvailability: builder.mutation({
+      query: (id) => ({
+        url: `/DeveloperAvailability/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['DeveloperAvailability'],
+    }),
+
+    // ─── Profile Owners (for interview assignment dropdowns) ────────────────
+    getProfileOwners: builder.query({
+      query: () => '/interviews/profile-owners',
+      transformResponse: (response) => (Array.isArray(response) ? response : []),
+    }),
+
+    // ─── Interview Schedule Requests endpoints (Accept/Reject flow) ─────────────
+    getScheduleRequests: builder.query({
+      query: ({ candidate, status } = {}) => {
+        const params = [];
+        if (candidate) params.push(`candidate=${encodeURIComponent(candidate)}`);
+        if (status)    params.push(`status=${encodeURIComponent(status)}`);
+        return `/ScheduleRequest${params.length ? '?' + params.join('&') : ''}`;
+      },
+      providesTags: ['ScheduleRequests'],
+    }),
+    createScheduleRequest: builder.mutation({
+      query: (body) => ({
+        url: '/ScheduleRequest',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['ScheduleRequests', 'Interviews'],
+    }),
+    respondScheduleRequest: builder.mutation({
+      query: ({ id, action, reason }) => ({
+        url: `/ScheduleRequest/${id}/${action}`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['ScheduleRequests', 'Interviews'],
+    }),
+    rescheduleScheduleRequest: builder.mutation({
+      query: ({ id, newDate, newTimeSlot, newTimeZone, reason }) => ({
+        url: `/ScheduleRequest/${id}/reschedule`,
+        method: 'POST',
+        body: {
+          ProposedDate: newDate,
+          ProposedTimeSlot: newTimeSlot,
+          ProposedTimeZone: newTimeZone,
+          Reason: reason,
+        },
+      }),
+      invalidatesTags: ['ScheduleRequests', 'Interviews'],
+    }),
+
   }),
 });
 
@@ -578,26 +725,36 @@ export const {
   useCreateJobMutation,
   useGetInterviewsPagedQuery,
   useGetInterviewStatsQuery,
+  useGetInterviewMonthlyTrendQuery,
   useGetInterviewStatusBreakdownQuery,
   useGetInterviewsForCalendarQuery,
   useGetInterviewCandidatesQuery,
   useGetInterviewCandidateNamesQuery,
   useGetInterviewCompanyNamesQuery,
   useGetInterviewStackNamesQuery,
+  useGetInterviewJobHunterNamesQuery,
+  useGetInterviewInvToNamesQuery,
+  useGetInterviewBdDevNamesQuery,
   useCreateInterviewMutation,
   useUpdateInterviewMutation,
+  usePatchInterviewMutation,
   useDeleteInterviewMutation,
   useSeedInterviewsMutation,
   useSyncUploadInterviewsMutation,
   useConfirmExcelUploadMutation,
   useGetExcelSessionStatusQuery,
+  useCheckFileStatusQuery,
+  useLazyCheckFileStatusQuery,
   useSeedQamerDemoWeekMutation,
   useGetCandidateDetailQuery,
   useRefreshInterviewsFromExcelMutation,
   useGetInterviewSyncStatusQuery,
   useGetLastSyncResultQuery,
   useLazyGetLastSyncResultQuery,
+  useGetInterviewByIdQuery,
   useGetInterviewHistoryQuery,
+  useGetMktInterviewDetailsQuery,
+  useLazyGetMktInterviewDetailsQuery,
   useGetHrStatsQuery,
   useGetPayrollStatsQuery,
   useGetEmployeeReportQuery,
@@ -611,4 +768,17 @@ export const {
   useSaveFeedbackMutation,
   useDeleteFeedbackMutation,
   useGetFeedbackDropdownsQuery,
+  useGetFilekeyTodayQuery,
+  useGetFilekeyAllQuery,
+  useLazySearchArchiveQuery,
+  useGetArchiveYearsQuery,
+  useGetDeveloperAvailabilityQuery,
+  useSaveDeveloperAvailabilityMutation,
+  useDeleteDeveloperAvailabilityMutation,
+  useGetScheduleRequestsQuery,
+  useCreateScheduleRequestMutation,
+  useRespondScheduleRequestMutation,
+  useRescheduleScheduleRequestMutation,
+  useGetProfileOwnersQuery,
+
 } = apiSlice;

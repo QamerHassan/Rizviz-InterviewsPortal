@@ -53,11 +53,11 @@ const ExcelSyncPoller = () => {
       try {
         const result = await getLastSyncResult().unwrap();
         const changes = result.changes || [];
-        
+
         const inserted = [];
         const deleted = [];
         const updated = [];
-        
+
         changes.forEach(c => {
           const changeType = (c.changeType || c.ChangeType || '').toLowerCase();
           if (changeType === 'new row' || changeType === 'newrow' || changeType === 'added') {
@@ -77,7 +77,7 @@ const ExcelSyncPoller = () => {
           } else {
             const rowFields = c.rowFields || [];
             const changedFields = rowFields.filter(f => f.changed ?? f.Changed);
-            
+
             if (changedFields.length > 0) {
               changedFields.forEach(f => {
                 updated.push({
@@ -97,7 +97,7 @@ const ExcelSyncPoller = () => {
                 const valParts = parts[1]?.split('→');
                 const oldVal = valParts[0]?.trim() || '';
                 const newVal = valParts[1]?.trim() || '';
-                
+
                 updated.push({
                   id: `${c.sr ?? c.Sr}-${fieldName}-${idx}`,
                   sr: c.sr ?? c.Sr,
@@ -110,10 +110,10 @@ const ExcelSyncPoller = () => {
             }
           }
         });
-        
+
         if (inserted.length > 0 || deleted.length > 0 || updated.length > 0) {
           dispatch(apiSlice.util.invalidateTags(['Interviews', 'Leads']));
-          
+
           setDiffData({
             fileName: result.fileName || 'your uploaded Excel file',
             inserted,
@@ -191,8 +191,8 @@ const ExcelSyncPoller = () => {
   }, [isAuthenticated, role, dispatch]);
 
   const inserted = diffData?.inserted || [];
-  const deleted  = diffData?.deleted  || [];
-  const updated  = diffData?.updated  || [];
+  const deleted = diffData?.deleted || [];
+  const updated = diffData?.updated || [];
 
   const addedColumns = [
     { title: 'SR', dataIndex: 'Sr', key: 'Sr', width: 60 },
@@ -212,17 +212,17 @@ const ExcelSyncPoller = () => {
     { title: 'SR', dataIndex: 'sr', key: 'sr', width: 60 },
     { title: 'Candidate', dataIndex: 'intervieweeName', key: 'intervieweeName', className: 'font-bold' },
     { title: 'Field Changed', dataIndex: 'changedField', key: 'changedField' },
-    { 
-      title: 'Old Value', 
-      dataIndex: 'oldValue', 
-      key: 'oldValue', 
-      render: (val) => <span className="line-through text-red-400">{val || 'N/A'}</span> 
+    {
+      title: 'Old Value',
+      dataIndex: 'oldValue',
+      key: 'oldValue',
+      render: (val) => <span className="line-through text-red-400">{val || 'N/A'}</span>
     },
-    { 
-      title: 'New Value', 
-      dataIndex: 'newValue', 
-      key: 'newValue', 
-      render: (val) => <span className="text-emerald-500 font-extrabold">{val || 'N/A'}</span> 
+    {
+      title: 'New Value',
+      dataIndex: 'newValue',
+      key: 'newValue',
+      render: (val) => <span className="text-emerald-500 font-extrabold">{val || 'N/A'}</span>
     },
   ];
 
@@ -248,54 +248,54 @@ const ExcelSyncPoller = () => {
     >
       <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
         <Text type="secondary" className="block mb-2">
-          The background file sync system detected updates to <Text strong>{diffData?.fileName || 'your uploaded Excel file'}</Text>. 
+          The background file sync system detected updates to <Text strong>{diffData?.fileName || 'your uploaded Excel file'}</Text>.
           Your dashboard and data views have been refreshed automatically. Here is the summary of what changed:
         </Text>
 
         {inserted.length > 0 && (
-          <Card 
-            size="small" 
-            title={<span className="text-emerald-600 font-black"><Badge status="success" /> New Rows Added ({inserted.length})</span>} 
+          <Card
+            size="small"
+            title={<span className="text-emerald-600 font-black"><Badge status="success" /> New Rows Added ({inserted.length})</span>}
             className="border-emerald-100 bg-emerald-50/20 dark:bg-emerald-950/10"
           >
-            <Table 
-              dataSource={inserted} 
-              columns={addedColumns} 
-              rowKey={(r) => r.Sr || r.IntervieweeName} 
-              pagination={false} 
-              size="small" 
+            <Table
+              dataSource={inserted}
+              columns={addedColumns}
+              rowKey={(r) => r.Sr || r.IntervieweeName}
+              pagination={false}
+              size="small"
             />
           </Card>
         )}
 
         {deleted.length > 0 && (
-          <Card 
-            size="small" 
-            title={<span className="text-rose-600 font-black"><Badge status="error" /> Rows Removed ({deleted.length})</span>} 
+          <Card
+            size="small"
+            title={<span className="text-rose-600 font-black"><Badge status="error" /> Rows Removed ({deleted.length})</span>}
             className="border-rose-100 bg-rose-50/20 dark:bg-rose-950/10"
           >
-            <Table 
-              dataSource={deleted} 
-              columns={deletedColumns} 
-              rowKey={(r) => r.Sr || r.IntervieweeName} 
-              pagination={false} 
-              size="small" 
+            <Table
+              dataSource={deleted}
+              columns={deletedColumns}
+              rowKey={(r) => r.Sr || r.IntervieweeName}
+              pagination={false}
+              size="small"
             />
           </Card>
         )}
 
         {updated.length > 0 && (
-          <Card 
-            size="small" 
-            title={<span className="text-amber-600 font-black"><Badge status="warning" /> Rows Modified ({updated.length})</span>} 
+          <Card
+            size="small"
+            title={<span className="text-amber-600 font-black"><Badge status="warning" /> Rows Modified ({updated.length})</span>}
             className="border-amber-100 bg-amber-50/20 dark:bg-amber-950/10"
           >
-            <Table 
-              dataSource={updated} 
-              columns={updatedColumns} 
-              rowKey={(r) => r.id || Math.random()} 
-              pagination={false} 
-              size="small" 
+            <Table
+              dataSource={updated}
+              columns={updatedColumns}
+              rowKey={(r) => r.id || Math.random()}
+              pagination={false}
+              size="small"
             />
           </Card>
         )}

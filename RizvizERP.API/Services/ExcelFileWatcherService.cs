@@ -68,12 +68,12 @@ namespace RizvizERP.API.Services
                     _lastKnownHash = ComputeHash(filePath);
                     var parsed = SeedHelper.ParseInterviewFile(filePath);
                     _lastKnownInterviews = MapParsed(parsed);
-                    _logger.LogInformation("[ExcelWatcher] Baseline loaded from disk: {Count} rows, hash={Hash}",
+                    _logger.LogInformation("[ExcelWatcher] Baseline loaded: {Count} rows, hash={Hash}",
                         _lastKnownInterviews.Count, _lastKnownHash);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "[ExcelWatcher] Could not load baseline from disk on startup.");
+                    _logger.LogWarning(ex, "[ExcelWatcher] Could not load baseline on startup.");
                 }
             }
 
@@ -85,11 +85,9 @@ namespace RizvizERP.API.Services
                     NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
                     EnableRaisingEvents = true
                 };
-
                 _watcher.Changed += OnFileChanged;
                 _watcher.Created += OnFileChanged;
-
-                _logger.LogInformation("[ExcelWatcher] Watching '{Path}' for changes.", filePath);
+                _logger.LogInformation("[ExcelWatcher] Watching '{Path}' for disk-level changes.", filePath);
             }
             catch (Exception ex)
             {
@@ -115,11 +113,10 @@ namespace RizvizERP.API.Services
         private void OnFileChanged(object sender, FileSystemEventArgs e)
         {
             // Debounce: Excel saves the file multiple times in quick succession.
-            // We wait 1.5 s after the last event before processing.
             lock (_lock)
             {
                 _debounceTimer?.Dispose();
-                _debounceTimer = new Timer(ProcessChange, null, TimeSpan.FromMilliseconds(1500), Timeout.InfiniteTimeSpan);
+                _debounceTimer = new Timer(ProcessChange, null, TimeSpan.FromMilliseconds(2000), Timeout.InfiniteTimeSpan);
             }
         }
 
@@ -127,6 +124,8 @@ namespace RizvizERP.API.Services
         {
             var filePath = Path.Combine(Directory.GetCurrentDirectory(), WatchedFileName);
             if (!File.Exists(filePath)) return;
+
+            WaitForFileUnlock(filePath);
 
             try
             {
@@ -161,7 +160,7 @@ namespace RizvizERP.API.Services
                 var payload = new
                 {
                     hasChanges = true,
-                    fileName = WatchedFileName,
+                    fileName = Path.GetFileName(filePath),
                     inserted = diff.Inserted.Select(i => new {
                         i.Sr, i.IntervieweeName, i.CompanyName, i.Status,
                         InterviewDate = i.InterviewDate?.ToString("yyyy-MM-dd"),
@@ -244,6 +243,31 @@ namespace RizvizERP.API.Services
             catch
             {
                 return null;
+            }
+        }
+
+        private static void WaitForFileUnlock(string filePath)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                try
+                {
+                    using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    if (fs.Length > 100)
+                    {
+                        // Verify ZIP format first
+                        using var zip = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Read) ;
+                        if (zip.Entries.Count > 0)
+                        {
+                            return; // successfully opened and verified zip structure
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore and wait
+                }
+                Thread.Sleep(500);
             }
         }
     }
